@@ -68,6 +68,12 @@ try {
         '4XL': '4XL_FRONT', '5XL': '5XL_FRONT', '6XL': '6XL_FRONT'
     };
 
+    var SLEEVE_SHAPE_NAMES = {
+        'S':   'S_SLEEVE',   'M':   'M_SLEEVE',   'L':   'L_SLEEVE',
+        'XL':  'XL_SLEEVE',  '2XL': '2XL_SLEEVE', '3XL': '3XL_SLEEVE',
+        '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
+    };
+
     var orders = getOrders();
     if (!orders) {
         // user cancelled — exit silently
@@ -102,15 +108,18 @@ try {
                 return copy;
             }
 
-            var backShapes  = {};
-            var frontShapes = {};
+            var backShapes   = {};
+            var frontShapes  = {};
+            var sleeveShapes = {};
             for (var s = 0; s < SIZES.length; s++) {
                 var sz = SIZES[s];
                 if (orders[sz].length > 0) {
-                    backShapes[sz]  = copyItemToDoc(BACK_SHAPE_NAMES[sz],  sourceDoc, mainDoc);
-                    backShapes[sz].name  = sz + '_BACK_SHAPE';
-                    frontShapes[sz] = copyItemToDoc(FRONT_SHAPE_NAMES[sz], sourceDoc, mainDoc);
-                    frontShapes[sz].name = sz + '_FRONT_SHAPE';
+                    backShapes[sz]        = copyItemToDoc(BACK_SHAPE_NAMES[sz],   sourceDoc, mainDoc);
+                    backShapes[sz].name   = sz + '_BACK_SHAPE';
+                    frontShapes[sz]       = copyItemToDoc(FRONT_SHAPE_NAMES[sz],  sourceDoc, mainDoc);
+                    frontShapes[sz].name  = sz + '_FRONT_SHAPE';
+                    sleeveShapes[sz]      = copyItemToDoc(SLEEVE_SHAPE_NAMES[sz], sourceDoc, mainDoc);
+                    sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
                 }
             }
 
@@ -123,8 +132,10 @@ try {
             var outputLayer = mainDoc.layers.add();
             outputLayer.name = 'SIZED_OUTPUT';
 
-            var backDesign  = mainDoc.pageItems.getByName('BACK_DESIGN');
-            var frontDesign = mainDoc.pageItems.getByName('FRONT_DESIGN');
+            var backDesign   = mainDoc.pageItems.getByName('BACK_DESIGN');
+            var frontDesign  = mainDoc.pageItems.getByName('FRONT_DESIGN');
+            var leftSleeve   = mainDoc.pageItems.getByName('LEFT_SLEEVE');
+            var rightSleeve  = mainDoc.pageItems.getByName('RIGHT_SLEEVE');
 
             function findItemByName(container, name) {
                 for (var i = 0; i < container.pageItems.length; i++) {
@@ -152,8 +163,8 @@ try {
                     }
                 }
 
-                var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.pageItems.length > 0)
-                    ? designCopy.pageItems[designCopy.pageItems.length - 1]
+                var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.clipped && designCopy.pageItems.length > 0)
+                    ? designCopy.pageItems[0]
                     : designCopy;
 
                 var preBounds = boundingPath.geometricBounds;
@@ -199,12 +210,12 @@ try {
             }
 
             // -------------------------------------------------------
-            // Step 3: Generate one row per copy — front and back side by side
+            // Step 3: Generate one row per copy — front, back, sleeves
             // -------------------------------------------------------
             var METERS_TO_PT = 100 * 28.3465;
             var bgWidth      = 1.6 * METERS_TO_PT;
             var padding      = 40;  // gap between design and background edges
-            var innerSpacing = 40;  // gap between front and back within a row
+            var innerSpacing = 40;  // gap between items within a row
             var bgLeft       = backDesign.position[0] + backDesign.width + 60;
             var bgTop        = backDesign.position[1];
             var currentTop   = bgTop;
@@ -216,16 +227,24 @@ try {
                 if (names.length === 0) continue;
 
                 for (var q = 0; q < names.length; q++) {
-                    var prefix    = sz + '_' + (q + 1);
-                    var backGrp   = resizeAndMask(backDesign,  backShapes[sz],  prefix + '_BACK',  names[q]);
-                    var frontGrp  = resizeAndMask(frontDesign, frontShapes[sz], prefix + '_FRONT', null);
+                    var prefix       = sz + '_' + (q + 1);
+                    var backGrp      = resizeAndMask(backDesign,  backShapes[sz],   prefix + '_BACK',          names[q]);
+                    var frontGrp     = resizeAndMask(frontDesign, frontShapes[sz],  prefix + '_FRONT',         null);
+                    var leftSlvGrp   = resizeAndMask(leftSleeve,  sleeveShapes[sz], prefix + '_LEFT_SLEEVE',   null);
+                    var rightSlvGrp  = resizeAndMask(rightSleeve, sleeveShapes[sz], prefix + '_RIGHT_SLEEVE',  null);
 
-                    // Row height fits the taller of the two designs
-                    var rowHeight     = Math.max(backGrp.height, frontGrp.height) + padding * 2;
-                    var totalRowWidth = frontGrp.width + innerSpacing + backGrp.width;
+                    // Sleeve column: left sleeve on top, right sleeve below
+                    var sleeveColHeight = leftSlvGrp.height + innerSpacing + rightSlvGrp.height;
+                    var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
+
+                    var rowHeight     = Math.max(frontGrp.height, backGrp.height, sleeveColHeight) + padding * 2;
+                    var totalRowWidth = frontGrp.width + innerSpacing + backGrp.width + innerSpacing + sleeveColWidth;
                     var startX        = bgLeft + (bgWidth - totalRowWidth) / 2;
 
-                    // Front on the left, back on the right, both vertically centered
+                    // Front on the left, back in the middle, sleeves stacked on the right
+                    var sleeveColX    = startX + frontGrp.width + innerSpacing + backGrp.width + innerSpacing;
+                    var sleeveColTop  = currentTop - (rowHeight - sleeveColHeight) / 2;
+
                     moveWithOutline(frontGrp,
                         startX,
                         currentTop - (rowHeight - frontGrp.height) / 2
@@ -234,14 +253,25 @@ try {
                         startX + frontGrp.width + innerSpacing,
                         currentTop - (rowHeight - backGrp.height) / 2
                     );
+                    moveWithOutline(leftSlvGrp,
+                        sleeveColX + (sleeveColWidth - leftSlvGrp.width) / 2,
+                        sleeveColTop
+                    );
+                    moveWithOutline(rightSlvGrp,
+                        sleeveColX + (sleeveColWidth - rightSlvGrp.width) / 2,
+                        sleeveColTop - leftSlvGrp.height - innerSpacing
+                    );
 
                     currentTop -= rowHeight;
                     allGroups.push(frontGrp);
                     allGroups.push(backGrp);
+                    allGroups.push(leftSlvGrp);
+                    allGroups.push(rightSlvGrp);
                 }
 
                 frontShapes[sz].remove();
                 backShapes[sz].remove();
+                sleeveShapes[sz].remove();
             }
 
             // -------------------------------------------------------
@@ -256,7 +286,7 @@ try {
             bg.name      = 'PRINT_BACKGROUND';
             bg.move(outputLayer, ElementPlacement.PLACEATEND);
 
-            alert('Done! Created ' + totalQty + ' shirt(s) across ' + (allGroups.length / 2) + ' row(s).');
+            alert('Done! Created ' + totalQty + ' shirt(s) across ' + (allGroups.length / 4) + ' row(s).');
         }
     }
 
