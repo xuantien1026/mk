@@ -10,7 +10,6 @@ function getOrders() {
     dlg.orientation = 'column';
     dlg.alignChildren = 'fill';
 
-    // Column headers
     var header = dlg.add('group');
     header.orientation = 'row';
     var h1 = header.add('statictext', undefined, 'Size');
@@ -43,8 +42,8 @@ function getOrders() {
         var parts = inputs[sizes[i]].text.split(',');
         var names = [];
         for (var j = 0; j < parts.length; j++) {
-            var name = trim(parts[j]);
-            if (name !== '') names.push(name);
+            var n = trim(parts[j]);
+            if (n !== '') names.push(n);
         }
         result[sizes[i]] = names;
     }
@@ -56,10 +55,17 @@ function getOrders() {
 // -------------------------------------------------------
 try {
     var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
-    var SHAPE_NAMES = {
+
+    var BACK_SHAPE_NAMES = {
         'S':   'S_BACK',   'M':   'M_BACK',   'L':   'L_BACK',
         'XL':  'XL_BACK',  '2XL': '2XL_BACK', '3XL': '3XL_BACK',
         '4XL': '4XL_BACK', '5XL': '5XL_BACK', '6XL': '6XL_BACK'
+    };
+
+    var FRONT_SHAPE_NAMES = {
+        'S':   'S_FRONT',   'M':   'M_FRONT',   'L':   'L_FRONT',
+        'XL':  'XL_FRONT',  '2XL': '2XL_FRONT', '3XL': '3XL_FRONT',
+        '4XL': '4XL_FRONT', '5XL': '5XL_FRONT', '6XL': '6XL_FRONT'
     };
 
     var orders = getOrders();
@@ -96,12 +102,15 @@ try {
                 return copy;
             }
 
-            var shapes = {};
+            var backShapes  = {};
+            var frontShapes = {};
             for (var s = 0; s < SIZES.length; s++) {
                 var sz = SIZES[s];
                 if (orders[sz].length > 0) {
-                    shapes[sz] = copyItemToDoc(SHAPE_NAMES[sz], sourceDoc, mainDoc);
-                    shapes[sz].name = sz + '_BACK_SHAPE';
+                    backShapes[sz]  = copyItemToDoc(BACK_SHAPE_NAMES[sz],  sourceDoc, mainDoc);
+                    backShapes[sz].name  = sz + '_BACK_SHAPE';
+                    frontShapes[sz] = copyItemToDoc(FRONT_SHAPE_NAMES[sz], sourceDoc, mainDoc);
+                    frontShapes[sz].name = sz + '_FRONT_SHAPE';
                 }
             }
 
@@ -114,9 +123,9 @@ try {
             var outputLayer = mainDoc.layers.add();
             outputLayer.name = 'SIZED_OUTPUT';
 
-            var backDesign = mainDoc.pageItems.getByName('BACK_DESIGN');
+            var backDesign  = mainDoc.pageItems.getByName('BACK_DESIGN');
+            var frontDesign = mainDoc.pageItems.getByName('FRONT_DESIGN');
 
-            // Recursively search for a named item inside a group
             function findItemByName(container, name) {
                 for (var i = 0; i < container.pageItems.length; i++) {
                     var item = container.pageItems[i];
@@ -129,14 +138,18 @@ try {
                 return null;
             }
 
+            // instanceName encodes both size and side, e.g. "S_1_BACK", "S_1_FRONT"
+            // customerName is null for the front (no name field)
             function resizeAndMask(design, maskShape, instanceName, customerName) {
                 var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
-                designCopy.name = instanceName + '_BACK_DESIGN';
+                designCopy.name = instanceName + '_DESIGN';
 
-                // Replace the customer name text element before scaling
-                var nameField = findItemByName(designCopy, 'CUSTOMER_NAME');
-                if (nameField && nameField.typename === 'TextFrame') {
-                    nameField.contents = customerName;
+                // Replace customer name only for back designs
+                if (customerName !== null) {
+                    var nameField = findItemByName(designCopy, 'CUSTOMER_NAME');
+                    if (nameField && nameField.typename === 'TextFrame') {
+                        nameField.contents = customerName;
+                    }
                 }
 
                 var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.pageItems.length > 0)
@@ -164,14 +177,14 @@ try {
 
                 var clipPath  = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
                 var clipGroup = outputLayer.groupItems.add();
-                clipGroup.name = instanceName + '_BACK_FINAL';
+                clipGroup.name = instanceName + '_FINAL';
 
                 designCopy.move(clipGroup, ElementPlacement.PLACEATEND);
                 clipPath.move(clipGroup, ElementPlacement.PLACEATBEGINNING);
                 clipGroup.clipped = true;
 
                 var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
-                outlineShape.name = instanceName + '_BACK_OUTLINE';
+                outlineShape.name = instanceName + '_OUTLINE';
                 outlineShape.move(clipGroup, ElementPlacement.PLACEBEFORE);
 
                 return clipGroup;
@@ -186,15 +199,16 @@ try {
             }
 
             // -------------------------------------------------------
-            // Step 3: Generate one row per copy, ordered by size
+            // Step 3: Generate one row per copy — front and back side by side
             // -------------------------------------------------------
             var METERS_TO_PT = 100 * 28.3465;
-            var bgWidth    = 1.6 * METERS_TO_PT;
-            var padding    = 40;
-            var bgLeft     = backDesign.position[0] + backDesign.width + 60;
-            var bgTop      = backDesign.position[1];
-            var currentTop = bgTop;
-            var allGroups  = [];
+            var bgWidth      = 1.6 * METERS_TO_PT;
+            var padding      = 40;  // gap between design and background edges
+            var innerSpacing = 40;  // gap between front and back within a row
+            var bgLeft       = backDesign.position[0] + backDesign.width + 60;
+            var bgTop        = backDesign.position[1];
+            var currentTop   = bgTop;
+            var allGroups    = [];
 
             for (var s = 0; s < SIZES.length; s++) {
                 var sz    = SIZES[s];
@@ -202,20 +216,32 @@ try {
                 if (names.length === 0) continue;
 
                 for (var q = 0; q < names.length; q++) {
-                    var instanceName = sz + '_' + (q + 1);
-                    var grp = resizeAndMask(backDesign, shapes[sz], instanceName, names[q]);
-                    var rowHeight = grp.height + padding * 2;
+                    var prefix    = sz + '_' + (q + 1);
+                    var backGrp   = resizeAndMask(backDesign,  backShapes[sz],  prefix + '_BACK',  names[q]);
+                    var frontGrp  = resizeAndMask(frontDesign, frontShapes[sz], prefix + '_FRONT', null);
 
-                    moveWithOutline(grp,
-                        bgLeft + (bgWidth - grp.width) / 2,
-                        currentTop - (rowHeight - grp.height) / 2
+                    // Row height fits the taller of the two designs
+                    var rowHeight     = Math.max(backGrp.height, frontGrp.height) + padding * 2;
+                    var totalRowWidth = frontGrp.width + innerSpacing + backGrp.width;
+                    var startX        = bgLeft + (bgWidth - totalRowWidth) / 2;
+
+                    // Front on the left, back on the right, both vertically centered
+                    moveWithOutline(frontGrp,
+                        startX,
+                        currentTop - (rowHeight - frontGrp.height) / 2
+                    );
+                    moveWithOutline(backGrp,
+                        startX + frontGrp.width + innerSpacing,
+                        currentTop - (rowHeight - backGrp.height) / 2
                     );
 
                     currentTop -= rowHeight;
-                    allGroups.push(grp);
+                    allGroups.push(frontGrp);
+                    allGroups.push(backGrp);
                 }
 
-                shapes[sz].remove();
+                frontShapes[sz].remove();
+                backShapes[sz].remove();
             }
 
             // -------------------------------------------------------
@@ -230,7 +256,7 @@ try {
             bg.name      = 'PRINT_BACKGROUND';
             bg.move(outputLayer, ElementPlacement.PLACEATEND);
 
-            alert('Done! Created ' + totalQty + ' design(s) across ' + allGroups.length + ' row(s).');
+            alert('Done! Created ' + totalQty + ' shirt(s) across ' + (allGroups.length / 2) + ' row(s).');
         }
     }
 
