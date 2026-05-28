@@ -1,10 +1,29 @@
 #target illustrator
 
+var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+
+var BACK_SHAPE_NAMES = {
+    'S':   'S_BACK',   'M':   'M_BACK',   'L':   'L_BACK',
+    'XL':  'XL_BACK',  '2XL': '2XL_BACK', '3XL': '3XL_BACK',
+    '4XL': '4XL_BACK', '5XL': '5XL_BACK', '6XL': '6XL_BACK'
+};
+
+var FRONT_SHAPE_NAMES = {
+    'S':   'S_FRONT',   'M':   'M_FRONT',   'L':   'L_FRONT',
+    'XL':  'XL_FRONT',  '2XL': '2XL_FRONT', '3XL': '3XL_FRONT',
+    '4XL': '4XL_FRONT', '5XL': '5XL_FRONT', '6XL': '6XL_FRONT'
+};
+
+var SLEEVE_SHAPE_NAMES = {
+    'S':   'S_SLEEVE',   'M':   'M_SLEEVE',   'L':   'L_SLEEVE',
+    'XL':  'XL_SLEEVE',  '2XL': '2XL_SLEEVE', '3XL': '3XL_SLEEVE',
+    '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
+};
+
 // -------------------------------------------------------
 // Dialog: collect customer names per size
 // -------------------------------------------------------
 function getOrders() {
-    var sizes = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
     var dlg = new Window('dialog', 'T-Shirt Orders');
     dlg.orientation = 'column';
@@ -18,14 +37,14 @@ function getOrders() {
     h2.preferredSize = [260, 20];
 
     var inputs = {};
-    for (var i = 0; i < sizes.length; i++) {
+    for (var i = 0; i < SIZES.length; i++) {
         var row = dlg.add('group');
         row.orientation = 'row';
-        var lbl = row.add('statictext', undefined, sizes[i] + ':');
+        var lbl = row.add('statictext', undefined, SIZES[i] + ':');
         lbl.preferredSize = [45, 20];
         var inp = row.add('edittext', undefined, '');
         inp.preferredSize = [260, 20];
-        inputs[sizes[i]] = inp;
+        inputs[SIZES[i]] = inp;
     }
 
     var btns = dlg.add('group');
@@ -38,14 +57,14 @@ function getOrders() {
     function trim(s) { return s.replace(/^\s+|\s+$/g, ''); }
 
     var result = {};
-    for (var i = 0; i < sizes.length; i++) {
-        var parts = inputs[sizes[i]].text.split(',');
+    for (var i = 0; i < SIZES.length; i++) {
+        var parts = inputs[SIZES[i]].text.split(',');
         var names = [];
         for (var j = 0; j < parts.length; j++) {
             var n = trim(parts[j]);
             if (n !== '') names.push(n);
         }
-        result[sizes[i]] = names;
+        result[SIZES[i]] = names;
     }
     return result;
 }
@@ -54,26 +73,6 @@ function getOrders() {
 // Main
 // -------------------------------------------------------
 try {
-    var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
-
-    var BACK_SHAPE_NAMES = {
-        'S':   'S_BACK',   'M':   'M_BACK',   'L':   'L_BACK',
-        'XL':  'XL_BACK',  '2XL': '2XL_BACK', '3XL': '3XL_BACK',
-        '4XL': '4XL_BACK', '5XL': '5XL_BACK', '6XL': '6XL_BACK'
-    };
-
-    var FRONT_SHAPE_NAMES = {
-        'S':   'S_FRONT',   'M':   'M_FRONT',   'L':   'L_FRONT',
-        'XL':  'XL_FRONT',  '2XL': '2XL_FRONT', '3XL': '3XL_FRONT',
-        '4XL': '4XL_FRONT', '5XL': '5XL_FRONT', '6XL': '6XL_FRONT'
-    };
-
-    var SLEEVE_SHAPE_NAMES = {
-        'S':   'S_SLEEVE',   'M':   'M_SLEEVE',   'L':   'L_SLEEVE',
-        'XL':  'XL_SLEEVE',  '2XL': '2XL_SLEEVE', '3XL': '3XL_SLEEVE',
-        '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
-    };
-
     var orders = getOrders();
     if (!orders) {
         // user cancelled — exit silently
