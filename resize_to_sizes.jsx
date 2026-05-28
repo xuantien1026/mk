@@ -166,9 +166,10 @@ try {
                 return results;
             }
 
-            // instanceName encodes both size and side, e.g. "S_1_BACK", "S_1_FRONT"
-            // customerName is null when there is no name field to replace
-            function resizeAndMask(design, maskShape, instanceName, customerName, sizeName) {
+            var PT_PER_MM = 2.83465;
+
+            // side: 'FRONT' | 'BACK' | null (sleeve — no SIZE element)
+            function resizeAndMask(design, maskShape, instanceName, customerName, sizeName, side) {
                 var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
                 designCopy.name = instanceName + '_DESIGN';
 
@@ -180,11 +181,16 @@ try {
                     }
                 }
 
-                // Replace all SIZE text elements with the actual size label
-                var sizeFields = findAllItemsByName(designCopy, 'SIZE');
-                for (var i = 0; i < sizeFields.length; i++) {
-                    if (sizeFields[i].typename === 'TextFrame') {
-                        sizeFields[i].contents = sizeName;
+                // Extract SIZE elements before scaling so their size is preserved
+                var sizeFields = [];
+                if (side !== null) {
+                    var allSizeItems = findAllItemsByName(designCopy, 'SIZE');
+                    for (var i = 0; i < allSizeItems.length; i++) {
+                        if (allSizeItems[i].typename === 'TextFrame') {
+                            allSizeItems[i].contents = sizeName;
+                            allSizeItems[i].move(outputLayer, ElementPlacement.PLACEATEND);
+                            sizeFields.push(allSizeItems[i]);
+                        }
                     }
                 }
 
@@ -218,6 +224,19 @@ try {
                 designCopy.move(clipGroup, ElementPlacement.PLACEATEND);
                 clipPath.move(clipGroup, ElementPlacement.PLACEATBEGINNING);
                 clipGroup.clipped = true;
+
+                // Position SIZE elements at fixed offsets from the mask edges and
+                // insert them above the design content so they are visible
+                var maskBottom = maskShape.position[1] - maskShape.height;
+                for (var i = 0; i < sizeFields.length; i++) {
+                    var sf = sizeFields[i];
+                    var sfY = maskBottom + PT_PER_MM + sf.height; // 1mm from bottom edge
+                    var sfX = (side === 'FRONT')
+                        ? maskShape.position[0] + maskShape.width - 20 * PT_PER_MM - sf.width  // 2cm from right
+                        : maskShape.position[0] + 20 * PT_PER_MM;                              // 2cm from left
+                    sf.position = [sfX, sfY];
+                    sf.move(designCopy, ElementPlacement.PLACEBEFORE);
+                }
 
                 var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
                 outlineShape.name = instanceName + '_OUTLINE';
@@ -253,10 +272,10 @@ try {
 
                 for (var q = 0; q < names.length; q++) {
                     var prefix       = sz + '_' + (q + 1);
-                    var backGrp      = resizeAndMask(backDesign,  backShapes[sz],   prefix + '_BACK',          names[q], sz);
-                    var frontGrp     = resizeAndMask(frontDesign, frontShapes[sz],  prefix + '_FRONT',         null,     sz);
-                    var leftSlvGrp   = resizeAndMask(leftSleeve,  sleeveShapes[sz], prefix + '_LEFT_SLEEVE',   null,     sz);
-                    var rightSlvGrp  = resizeAndMask(rightSleeve, sleeveShapes[sz], prefix + '_RIGHT_SLEEVE',  null,     sz);
+                    var backGrp      = resizeAndMask(backDesign,  backShapes[sz],   prefix + '_BACK',          names[q], sz, 'BACK');
+                    var frontGrp     = resizeAndMask(frontDesign, frontShapes[sz],  prefix + '_FRONT',         null,     sz, 'FRONT');
+                    var leftSlvGrp   = resizeAndMask(leftSleeve,  sleeveShapes[sz], prefix + '_LEFT_SLEEVE',   null,     sz, null);
+                    var rightSlvGrp  = resizeAndMask(rightSleeve, sleeveShapes[sz], prefix + '_RIGHT_SLEEVE',  null,     sz, null);
 
                     // Sleeve column: left sleeve on top, right sleeve below
                     var sleeveColHeight = leftSlvGrp.height + innerSpacing + rightSlvGrp.height;
