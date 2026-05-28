@@ -69,9 +69,9 @@ try {
     };
 
     var SLEEVE_SHAPE_NAMES = {
-        'S':   'S_SLEEVE',   'M':   'M_SLEEVE',   'L':   'L_SLEEVE',
-        'XL':  'XL_SLEEVE',  '2XL': '2XL_SLEEVE', '3XL': '3XL_SLEEVE',
-        '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
+        'S':   'S_SLEEVE_2',   'M':   'M_SLEEVE_2',   'L':   'L_SLEEVE_2',
+        'XL':  'XL_SLEEVE_2',  '2XL': '2XL_SLEEVE_2', '3XL': '3XL_SLEEVE_2',
+        '4XL': '4XL_SLEEVE_2', '5XL': '5XL_SLEEVE_2', '6XL': '6XL_SLEEVE_2'
     };
 
     var orders = getOrders();
@@ -96,8 +96,16 @@ try {
 
             var sourceDoc = app.open(sourceFile);
 
+            function requireItem(collection, name, fileName) {
+                try {
+                    return collection.getByName(name);
+                } catch (e) {
+                    throw new Error('Khong tim thay "' + name + '" trong file ' + fileName);
+                }
+            }
+
             function copyItemToDoc(itemName, fromDoc, toDoc) {
-                var item = fromDoc.pageItems.getByName(itemName);
+                var item = requireItem(fromDoc.pageItems, itemName, fromDoc.name);
                 var savedName = item.name;
                 var destLayer = toDoc.layers[0];
                 var wasLocked = destLayer.locked;
@@ -132,10 +140,10 @@ try {
             var outputLayer = mainDoc.layers.add();
             outputLayer.name = 'SIZED_OUTPUT';
 
-            var backDesign   = mainDoc.pageItems.getByName('BACK_DESIGN');
-            var frontDesign  = mainDoc.pageItems.getByName('FRONT_DESIGN');
-            var leftSleeve   = mainDoc.pageItems.getByName('LEFT_SLEEVE');
-            var rightSleeve  = mainDoc.pageItems.getByName('RIGHT_SLEEVE');
+            var backDesign   = requireItem(mainDoc.pageItems, 'BACK_DESIGN',   mainDoc.name);
+            var frontDesign  = requireItem(mainDoc.pageItems, 'FRONT_DESIGN',  mainDoc.name);
+            var leftSleeve   = requireItem(mainDoc.pageItems, 'LEFT_SLEEVE',   mainDoc.name);
+            var rightSleeve  = requireItem(mainDoc.pageItems, 'RIGHT_SLEEVE',  mainDoc.name);
 
             function findItemByName(container, name) {
                 for (var i = 0; i < container.pageItems.length; i++) {
