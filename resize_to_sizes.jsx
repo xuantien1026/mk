@@ -157,9 +157,19 @@ try {
                 return null;
             }
 
+            function findAllItemsByName(container, name, results) {
+                if (!results) results = [];
+                for (var i = 0; i < container.pageItems.length; i++) {
+                    var item = container.pageItems[i];
+                    if (item.name === name) results.push(item);
+                    if (item.typename === 'GroupItem') findAllItemsByName(item, name, results);
+                }
+                return results;
+            }
+
             // instanceName encodes both size and side, e.g. "S_1_BACK", "S_1_FRONT"
-            // customerName is null for the front (no name field)
-            function resizeAndMask(design, maskShape, instanceName, customerName) {
+            // customerName is null when there is no name field to replace
+            function resizeAndMask(design, maskShape, instanceName, customerName, sizeName) {
                 var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
                 designCopy.name = instanceName + '_DESIGN';
 
@@ -168,6 +178,14 @@ try {
                     var nameField = findItemByName(designCopy, 'CUSTOMER_NAME');
                     if (nameField && nameField.typename === 'TextFrame') {
                         nameField.contents = customerName;
+                    }
+                }
+
+                // Replace all SIZE text elements with the actual size label
+                var sizeFields = findAllItemsByName(designCopy, 'SIZE');
+                for (var i = 0; i < sizeFields.length; i++) {
+                    if (sizeFields[i].typename === 'TextFrame') {
+                        sizeFields[i].contents = sizeName;
                     }
                 }
 
@@ -236,10 +254,10 @@ try {
 
                 for (var q = 0; q < names.length; q++) {
                     var prefix       = sz + '_' + (q + 1);
-                    var backGrp      = resizeAndMask(backDesign,  backShapes[sz],   prefix + '_BACK',          names[q]);
-                    var frontGrp     = resizeAndMask(frontDesign, frontShapes[sz],  prefix + '_FRONT',         null);
-                    var leftSlvGrp   = resizeAndMask(leftSleeve,  sleeveShapes[sz], prefix + '_LEFT_SLEEVE',   null);
-                    var rightSlvGrp  = resizeAndMask(rightSleeve, sleeveShapes[sz], prefix + '_RIGHT_SLEEVE',  null);
+                    var backGrp      = resizeAndMask(backDesign,  backShapes[sz],   prefix + '_BACK',          names[q], sz);
+                    var frontGrp     = resizeAndMask(frontDesign, frontShapes[sz],  prefix + '_FRONT',         null,     sz);
+                    var leftSlvGrp   = resizeAndMask(leftSleeve,  sleeveShapes[sz], prefix + '_LEFT_SLEEVE',   null,     sz);
+                    var rightSlvGrp  = resizeAndMask(rightSleeve, sleeveShapes[sz], prefix + '_RIGHT_SLEEVE',  null,     sz);
 
                     // Sleeve column: left sleeve on top, right sleeve below
                     var sleeveColHeight = leftSlvGrp.height + innerSpacing + rightSlvGrp.height;
