@@ -69,9 +69,9 @@ try {
     };
 
     var SLEEVE_SHAPE_NAMES = {
-        'S':   'S_SLEEVE_2',   'M':   'M_SLEEVE_2',   'L':   'L_SLEEVE_2',
-        'XL':  'XL_SLEEVE_2',  '2XL': '2XL_SLEEVE_2', '3XL': '3XL_SLEEVE_2',
-        '4XL': '4XL_SLEEVE_2', '5XL': '5XL_SLEEVE_2', '6XL': '6XL_SLEEVE_2'
+        'S':   'S_SLEEVE',   'M':   'M_SLEEVE',   'L':   'L_SLEEVE',
+        'XL':  'XL_SLEEVE',  '2XL': '2XL_SLEEVE', '3XL': '3XL_SLEEVE',
+        '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
     };
 
     var orders = getOrders();
