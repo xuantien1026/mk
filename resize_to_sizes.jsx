@@ -20,18 +20,16 @@ var SLEEVE_SHAPE_NAMES = {
     '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
 };
 
-var CM_TO_PT = 28.3465;
-
 var CUSTOMER_NAME_MAX_WIDTH = {
-    'S':   29.5 * CM_TO_PT,
-    'M':   31.0 * CM_TO_PT,
-    'L':   32.5 * CM_TO_PT,
-    'XL':  34.0 * CM_TO_PT,
-    '2XL': 35.5 * CM_TO_PT,
-    '3XL': 37.0 * CM_TO_PT,
-    '4XL': 38.5 * CM_TO_PT,
-    '5XL': 40.0 * CM_TO_PT,
-    '6XL': 41.5 * CM_TO_PT
+    'S':   29.5 * 10 * PT_PER_MM,
+    'M':   31.0 * 10 * PT_PER_MM,
+    'L':   32.5 * 10 * PT_PER_MM,
+    'XL':  34.0 * 10 * PT_PER_MM,
+    '2XL': 35.5 * 10 * PT_PER_MM,
+    '3XL': 37.0 * 10 * PT_PER_MM,
+    '4XL': 38.5 * 10 * PT_PER_MM,
+    '5XL': 40.0 * 10 * PT_PER_MM,
+    '6XL': 41.5 * 10 * PT_PER_MM
 };
 
 // -------------------------------------------------------
@@ -128,8 +126,7 @@ function findAllItemsByName(container, name, results) {
     return results;
 }
 
-var PT_PER_MM    = 2.83465;
-var METERS_TO_PT = 100 * 28.3465;
+var PT_PER_MM = 2.83465;
 
 function main() {
     var orders = getOrders();
@@ -275,7 +272,7 @@ function main() {
     // -------------------------------------------------------
     // Step 3: Generate one row per copy — front, back, sleeves
     // -------------------------------------------------------
-    var bgWidth    = 1.6 * METERS_TO_PT;
+    var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var padding    = 40;
     var spacing    = 40;
     var bgLeft     = backDesign.position[0] + backDesign.width + 60;
