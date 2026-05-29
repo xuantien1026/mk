@@ -20,6 +20,20 @@ var SLEEVE_SHAPE_NAMES = {
     '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
 };
 
+var CM_TO_PT = 28.3465;
+
+var CUSTOMER_NAME_MAX_WIDTH = {
+    'S':   29.5 * CM_TO_PT,
+    'M':   31.0 * CM_TO_PT,
+    'L':   32.5 * CM_TO_PT,
+    'XL':  34.0 * CM_TO_PT,
+    '2XL': 35.5 * CM_TO_PT,
+    '3XL': 37.0 * CM_TO_PT,
+    '4XL': 38.5 * CM_TO_PT,
+    '5XL': 40.0 * CM_TO_PT,
+    '6XL': 41.5 * CM_TO_PT
+};
+
 // -------------------------------------------------------
 // Dialog: collect customer names per size
 // -------------------------------------------------------
@@ -175,6 +189,12 @@ function main() {
             var nameField = findItemByName(designCopy, 'CUSTOMER_NAME');
             if (nameField && nameField.typename === 'TextFrame') {
                 nameField.contents = customerName;
+                var maxW      = CUSTOMER_NAME_MAX_WIDTH[sizeName];
+                var nameBounds = nameField.geometricBounds;
+                var nameWidth  = nameBounds[2] - nameBounds[0];
+                if (maxW && nameWidth > maxW) {
+                    nameField.resize((maxW / nameWidth) * 100, 100, true, true, true, true, false, Transformation.CENTER);
+                }
             }
         }
 
