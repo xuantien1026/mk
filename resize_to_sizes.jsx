@@ -245,11 +245,14 @@ function main() {
         // Position SIZE elements at fixed offsets from mask edges
         var maskBottom = maskShape.position[1] - maskShape.height;
         for (var i = 0; i < sizeFields.length; i++) {
-            var sf  = sizeFields[i];
-            var sfY = maskBottom + PT_PER_MM + sf.height; // 1mm from bottom edge
+            var sf       = sizeFields[i];
+            var sfBounds = sf.geometricBounds; // [left, top, right, bottom]
+            // Align rendered bottom flush with mask bottom edge
+            var sfY = sf.position[1] + (maskBottom - sfBounds[3]);
+            // Shift position so rendered edge lands exactly 2cm from mask side edge
             var sfX = (side === 'FRONT')
-                ? maskShape.position[0] + maskShape.width - 20 * PT_PER_MM - sf.width  // 2cm from right
-                : maskShape.position[0] + 20 * PT_PER_MM;                              // 2cm from left
+                ? sf.position[0] + (maskShape.position[0] + maskShape.width - 20 * PT_PER_MM - sfBounds[2])
+                : sf.position[0] + (maskShape.position[0] + 20 * PT_PER_MM - sfBounds[0]);
             sf.position = [sfX, sfY];
             sf.move(designCopy, ElementPlacement.PLACEBEFORE);
         }
