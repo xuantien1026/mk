@@ -159,6 +159,17 @@ function findAllItemsByName(container, name, results) {
     return results;
 }
 
+// TextFrame.geometricBounds extends to the font's descender line, not the actual
+// glyph ink. Outline a throwaway copy to measure the true extent of the visible
+// glyphs. Returns [left, top, right, bottom].
+function glyphBounds(textFrame) {
+    var dup      = textFrame.duplicate();
+    var outlined = dup.createOutline();
+    var b        = outlined.geometricBounds;
+    outlined.remove();
+    return b;
+}
+
 // -------------------------------------------------------
 // Main
 // -------------------------------------------------------
@@ -257,10 +268,23 @@ function main() {
 
         // Position SIZE elements at fixed offsets from mask edges
         var maskBottom = maskShape.position[1] - maskShape.height;
+        var SIZE_BOTTOM_GAP = 1 * PT_PER_MM; // text bottom sits 1mm above the design bottom edge
+        var SIZE_GLYPH_HEIGHT = 2 * PT_PER_MM; // visible glyphs scaled to exactly 2mm tall
         for (var i = 0; i < sizeFields.length; i++) {
-            var sf       = sizeFields[i];
+            var sf = sizeFields[i];
+
+            // Scale the text so its visible glyphs are exactly SIZE_GLYPH_HEIGHT tall.
+            var gb      = glyphBounds(sf);
+            var glyphH  = gb[1] - gb[3];
+            if (glyphH > 0) {
+                var sizeScale = (SIZE_GLYPH_HEIGHT / glyphH) * 100;
+                sf.resize(sizeScale, sizeScale, true, true, true, true, true, Transformation.CENTER);
+            }
+
             var sfBounds = sf.geometricBounds;
-            var sfY = sf.position[1] + (maskBottom - sfBounds[3]);
+            // Lift the true glyph bottom (not the descender-padded geometric bottom)
+            // SIZE_BOTTOM_GAP above maskBottom.
+            var sfY = sf.position[1] + (maskBottom + SIZE_BOTTOM_GAP - glyphBounds(sf)[3]);
             var sfX = (side === 'FRONT')
                 ? sf.position[0] + (maskShape.position[0] + maskShape.width - 20 * PT_PER_MM - sfBounds[2])
                 : sf.position[0] + (maskShape.position[0] + 20 * PT_PER_MM - sfBounds[0]);
