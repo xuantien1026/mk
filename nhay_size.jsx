@@ -265,10 +265,24 @@ function main() {
         return clipGroup;
     }
 
+    // A clipped group's geometricBounds (and .width/.height) INCLUDE the artwork
+    // hidden by the mask — Illustrator does not clip the reported bounds. The clip
+    // path (pageItems[0]) defines the true visible extent, so read it for sizing.
+    function visBounds(group) {
+        var p = (group.typename === 'GroupItem' && group.clipped && group.pageItems.length > 0)
+            ? group.pageItems[0]
+            : group;
+        var b = p.geometricBounds; // [left, top, right, bottom]
+        return { left: b[0], top: b[1], width: b[2] - b[0], height: b[1] - b[3] };
+    }
+
+    // Move a clip group so its VISIBLE top-left lands at (newX, newY); the matching
+    // _OUTLINE is shifted by the same delta.
     function moveWithOutline(group, newX, newY) {
-        var deltaX = newX - group.position[0];
-        var deltaY = newY - group.position[1];
-        group.position = [newX, newY];
+        var vb = visBounds(group);
+        var deltaX = newX - vb.left;
+        var deltaY = newY - vb.top;
+        group.position = [group.position[0] + deltaX, group.position[1] + deltaY];
         var outline = mainDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
@@ -288,18 +302,21 @@ function main() {
         var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, null);
         var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapes[sz], sz + '_RIGHT_SLEEVE', sz, null);
 
-        var sleeveColHeight = leftSlvGrp.height + spacing + rightSlvGrp.height;
-        var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
-        var rowHeight       = Math.max(frontGrp.height, backGrp.height, sleeveColHeight) + padding * 2;
-        var totalRowWidth   = frontGrp.width + spacing + backGrp.width + spacing + sleeveColWidth;
+        var frontVB = visBounds(frontGrp), backVB = visBounds(backGrp);
+        var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
+
+        var sleeveColHeight = lSlvVB.height + spacing + rSlvVB.height;
+        var sleeveColWidth  = Math.max(lSlvVB.width, rSlvVB.width);
+        var rowHeight       = Math.max(frontVB.height, backVB.height, sleeveColHeight) + padding * 2;
+        var totalRowWidth   = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth;
         var startX          = bgLeft + (bgWidth - totalRowWidth) / 2;
-        var sleeveColX      = startX + frontGrp.width + spacing + backGrp.width + spacing;
+        var sleeveColX      = startX + frontVB.width + spacing + backVB.width + spacing;
         var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
 
-        moveWithOutline(frontGrp,    startX,                                          currentTop - (rowHeight - frontGrp.height)   / 2);
-        moveWithOutline(backGrp,     startX + frontGrp.width + spacing,               currentTop - (rowHeight - backGrp.height)    / 2);
-        moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - leftSlvGrp.width)  / 2, sleeveColTop);
-        moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
+        moveWithOutline(frontGrp,    startX,                                       currentTop - (rowHeight - frontVB.height) / 2);
+        moveWithOutline(backGrp,     startX + frontVB.width + spacing,             currentTop - (rowHeight - backVB.height)  / 2);
+        moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - lSlvVB.width) / 2, sleeveColTop);
+        moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rSlvVB.width) / 2, sleeveColTop - lSlvVB.height - spacing);
 
         currentTop -= rowHeight;
 
