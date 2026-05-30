@@ -121,15 +121,18 @@ function main() {
     var mainDoc = app.activeDocument;
 
     // Place output below the SIZED_OUTPUT content
-    var sizedLayer  = requireItem(mainDoc.layers, 'SIZED_OUTPUT', mainDoc.name);
-    var backDesign  = requireItem(mainDoc.pageItems, 'BACK_DESIGN', mainDoc.name);
-    var bgLeft      = backDesign.position[0] + backDesign.width + 60;
-    var sizedBottom = backDesign.position[1]; // fallback: top of original design
+    var sizedLayer = requireItem(mainDoc.layers, 'SIZED_OUTPUT', mainDoc.name);
+    var backDesign = requireItem(mainDoc.pageItems, 'BACK_DESIGN', mainDoc.name);
+
+    // Place PRINT_OUTPUT to the right of SIZED_OUTPUT (same Y) to avoid
+    // exceeding Illustrator's pasteboard coordinate limits
+    var sizedRight = -Infinity;
     for (var i = 0; i < sizedLayer.pageItems.length; i++) {
-        var itemBottom = sizedLayer.pageItems[i].geometricBounds[3];
-        if (itemBottom < sizedBottom) sizedBottom = itemBottom;
+        var r = sizedLayer.pageItems[i].geometricBounds[2];
+        if (r > sizedRight) sizedRight = r;
     }
-    var bgTop = sizedBottom - 100; // 100pt gap below SIZED_OUTPUT
+    var bgLeft = sizedRight + 100;
+    var bgTop  = backDesign.position[1];
 
     var outputLayer = mainDoc.layers.add();
     outputLayer.name = 'PRINT_OUTPUT';
