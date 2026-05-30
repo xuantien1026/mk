@@ -17,9 +17,23 @@ var CUSTOMER_NAME_MAX_WIDTH = {
 };
 
 // -------------------------------------------------------
+// Detect which sizes were prepared in Step 1
+// -------------------------------------------------------
+function detectPreparedSizes() {
+    var prepared = [];
+    for (var i = 0; i < SIZES.length; i++) {
+        try {
+            app.activeDocument.pageItems.getByName(SIZES[i] + '_BACK_FINAL');
+            prepared.push(SIZES[i]);
+        } catch (e) { /* not found */ }
+    }
+    return prepared;
+}
+
+// -------------------------------------------------------
 // Dialog: collect customer names per size
 // -------------------------------------------------------
-function getOrders() {
+function getOrders(sizes) {
     var dlg = new Window('dialog', 'Step 2: T-Shirt Orders');
     dlg.orientation = 'column';
     dlg.alignChildren = 'fill';
@@ -32,14 +46,14 @@ function getOrders() {
     h2.preferredSize = [260, 20];
 
     var inputs = {};
-    for (var i = 0; i < SIZES.length; i++) {
+    for (var i = 0; i < sizes.length; i++) {
         var row = dlg.add('group');
         row.orientation = 'row';
-        var lbl = row.add('statictext', undefined, SIZES[i] + ':');
+        var lbl = row.add('statictext', undefined, sizes[i] + ':');
         lbl.preferredSize = [45, 20];
         var inp = row.add('edittext', undefined, '');
         inp.preferredSize = [260, 20];
-        inputs[SIZES[i]] = inp;
+        inputs[sizes[i]] = inp;
     }
 
     var btns = dlg.add('group');
@@ -52,14 +66,14 @@ function getOrders() {
     function trim(s) { return s.replace(/^\s+|\s+$/g, ''); }
 
     var result = {};
-    for (var i = 0; i < SIZES.length; i++) {
-        var parts = inputs[SIZES[i]].text.split(',');
+    for (var i = 0; i < sizes.length; i++) {
+        var parts = inputs[sizes[i]].text.split(',');
         var names = [];
         for (var j = 0; j < parts.length; j++) {
             var n = trim(parts[j]);
             if (n !== '') names.push(n);
         }
-        result[SIZES[i]] = names;
+        result[sizes[i]] = names;
     }
     return result;
 }
@@ -91,11 +105,17 @@ function findItemByName(container, name) {
 // Main
 // -------------------------------------------------------
 function main() {
-    var orders = getOrders();
+    var preparedSizes = detectPreparedSizes();
+    if (preparedSizes.length === 0) {
+        alert('No resized designs found. Run resize_to_sizes.jsx first.');
+        return;
+    }
+
+    var orders = getOrders(preparedSizes);
     if (!orders) return;
 
     var totalQty = 0;
-    for (var s = 0; s < SIZES.length; s++) totalQty += orders[SIZES[s]].length;
+    for (var s = 0; s < preparedSizes.length; s++) totalQty += orders[preparedSizes[s]].length;
     if (totalQty === 0) { alert('No names entered. Nothing to do.'); return; }
 
     var mainDoc = app.activeDocument;
@@ -155,8 +175,8 @@ function main() {
     var currentTop = bgTop;
     var allGroups  = [];
 
-    for (var s = 0; s < SIZES.length; s++) {
-        var sz    = SIZES[s];
+    for (var s = 0; s < preparedSizes.length; s++) {
+        var sz    = preparedSizes[s];
         var names = orders[sz];
         if (names.length === 0) continue;
 
