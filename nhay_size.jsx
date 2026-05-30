@@ -171,25 +171,32 @@ function main() {
     }
     var sourceDoc = app.open(options.file);
 
+    // Output goes to a brand-new document, not a layer in the design file.
+    // The artboard is made large (and we anchor to its top) so the vertical stack
+    // stays above Illustrator's pasteboard coordinate limit for all sizes.
+    var OUT_W = 575 * 10 * PT_PER_MM; // 575 cm — near Illustrator's max artboard size
+    var OUT_H = 575 * 10 * PT_PER_MM; // 575 cm — near Illustrator's max artboard size
+    var outDoc = app.documents.add(mainDoc.documentColorSpace, OUT_W, OUT_H);
+    outDoc.artboards[0].artboardRect = [0, OUT_H, OUT_W, 0];
+
+    var outputLayer = outDoc.layers[0];
+    outputLayer.name = 'SIZED_OUTPUT';
+
     var backShapes = {}, frontShapes = {}, sleeveShapes = {};
     for (var s = 0; s < options.sizes.length; s++) {
         var sz = options.sizes[s];
         function shapeName(sz, type, variant) {
             return variant ? sz + '_' + type + '_' + variant : sz + '_' + type;
         }
-        backShapes[sz]        = copyItemToDoc(shapeName(sz, 'BACK',   options.variants.BACK),   sourceDoc, mainDoc);
+        backShapes[sz]        = copyItemToDoc(shapeName(sz, 'BACK',   options.variants.BACK),   sourceDoc, outDoc);
         backShapes[sz].name   = sz + '_BACK_SHAPE';
-        frontShapes[sz]       = copyItemToDoc(shapeName(sz, FRONT,    options.variants[FRONT]), sourceDoc, mainDoc);
+        frontShapes[sz]       = copyItemToDoc(shapeName(sz, FRONT,    options.variants[FRONT]), sourceDoc, outDoc);
         frontShapes[sz].name  = sz + '_FRONT_SHAPE';
-        sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, 'SLEEVE', options.variants.SLEEVE), sourceDoc, mainDoc);
+        sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, 'SLEEVE', options.variants.SLEEVE), sourceDoc, outDoc);
         sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
     }
 
     sourceDoc.close(SaveOptions.DONOTSAVECHANGES);
-    app.activeDocument = mainDoc;
-
-    var outputLayer = mainDoc.layers.add();
-    outputLayer.name = 'SIZED_OUTPUT';
 
     var backDesign  = requireItem(mainDoc.pageItems, 'BACK_DESIGN',  mainDoc.name);
     var frontDesign = requireItem(mainDoc.pageItems, 'FRONT_DESIGN', mainDoc.name);
@@ -283,18 +290,18 @@ function main() {
         var deltaX = newX - vb.left;
         var deltaY = newY - vb.top;
         group.position = [group.position[0] + deltaX, group.position[1] + deltaY];
-        var outline = mainDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
+        var outline = outDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
 
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var padding    = 40;
     var spacing    = 40;
-    // Anchor the output to the top edge of the artboard so the vertical stack has
-    // maximum room before hitting Illustrator's pasteboard coordinate limit (the
+    // Anchor the output to the top edge of the output artboard so the vertical stack
+    // has maximum room before hitting Illustrator's pasteboard coordinate limit (the
     // point where geometry gets clamped, which corrupts the lower sizes).
-    var bgLeft     = backDesign.position[0] + backDesign.width + 60;
-    var bgTop      = mainDoc.artboards[0].artboardRect[1];
+    var bgLeft     = outDoc.artboards[0].artboardRect[0];
+    var bgTop      = outDoc.artboards[0].artboardRect[1];
     var currentTop = bgTop;
 
     for (var s = 0; s < options.sizes.length; s++) {
@@ -328,7 +335,11 @@ function main() {
         sleeveShapes[sz].remove();
     }
 
-    alert('Done! ' + options.sizes.length + ' size(s) prepared on layer "SIZED_OUTPUT".\nMake manual adjustments, then run apply_names.jsx.');
+    app.activeDocument = outDoc;
+    // Show the transparency grid so the artboard reads as an empty/transparent
+    // background instead of solid white.
+    try { app.executeMenuCommand('TransparencyGrid'); } catch (e) {}
+    alert('Done! ' + options.sizes.length + ' size(s) prepared in a new document (layer "SIZED_OUTPUT").\nMake manual adjustments and save, then run apply_names.jsx on it.');
 }
 
 try {
