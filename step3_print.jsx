@@ -214,15 +214,7 @@ function main() {
     bg.name      = 'PRINT_BACKGROUND';
     bg.move(outputLayer, ElementPlacement.PLACEATEND);
 
-    // Offer save dialog
-    app.activeDocument = newDoc;
-    var saveFile = File.saveDialog('Luu file in', '*.ai');
-    if (saveFile) {
-        newDoc.saveAs(saveFile, new IllustratorSaveOptions());
-        alert('Da luu: ' + saveFile.fsName);
-    } else {
-        alert('Hoan thanh! File in da duoc tao nhung chua luu.');
-    }
+    alert('Hoan thanh! Da xep ' + items.length + ' vat the vao ban in.');
 }
 
 try {
