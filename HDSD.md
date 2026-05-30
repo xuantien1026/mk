@@ -27,7 +27,7 @@ Script được chia làm 2 bước:
 ### Cú pháp
 
 ```
-{size}_{vị_trí}_{tên_variant}
+{size}_{vị_trí}_{tên_kiểu}
 ```
 
 ### Các thành phần
@@ -35,25 +35,25 @@ Script được chia làm 2 bước:
 | Thành phần      | Giá trị hợp lệ                                                   |
 |-----------------|------------------------------------------------------------------|
 | `{size}`        | `S`, `M`, `L`, `XL`, `2XL`, `3XL`, `4XL`, `5XL`, `6XL`        |
-| `{vị_trí}`      | `BACK`, `FRONT`, `SLEEVE`                                        |
-| `{tên_variant}` | Tên tự do, ví dụ: `SHAPE1`, `SHAPE2`, `SLIM`, `REGULAR`         |
+| `{vị_trí}`      | `SAU` (mặt sau), `TRUOC` (mặt trước), `TAY` (tay áo)            |
+| `{tên_kiểu}` | Tên tự do, ví dụ: `KIEU1`, `KIEU2`, `SLIM`, `REGULAR`         |
 
 ### Ví dụ
 
 Nếu có 2 kiểu dáng mặt sau:
 
 ```
-S_BACK_SHAPE1    M_BACK_SHAPE1    L_BACK_SHAPE1    ...
-S_BACK_SHAPE2    M_BACK_SHAPE2    L_BACK_SHAPE2    ...
+S_SAU_KIEU1    M_SAU_KIEU1    L_SAU_KIEU1    ...
+S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...
 ```
 
-Khi chạy script, người dùng chỉ cần chọn `SHAPE1` hoặc `SHAPE2` — script sẽ tự ghép với từng size.
+Khi chạy script, người dùng chỉ cần chọn `KIEU1` hoặc `KIEU2` — script sẽ tự ghép với từng size.
 
 ---
 
 ## Cấu hình database (`shapes_db.json`)
 
-File `shapes_db.json` nằm cùng thư mục với script. Cập nhật file này khi thêm file outline mới hoặc thêm variant mới.
+File `shapes_db.json` nằm cùng thư mục với script. Cập nhật file này khi thêm file outline mới hoặc thêm kiểu mới.
 
 ### Cấu trúc
 
@@ -61,9 +61,9 @@ File `shapes_db.json` nằm cùng thư mục với script. Cập nhật file nà
 {
     "Tên hiển thị": {
         "path": "đường dẫn tới file .ai",
-        "BACK":   ["tên variant 1", "tên variant 2"],
-        "FRONT":  ["tên variant 1"],
-        "SLEEVE": ["tên variant 1"]
+        "SAU":   ["tên kiểu 1", "tên kiểu 2"],
+        "TRUOC": ["tên kiểu 1"],
+        "TAY":   ["tên kiểu 1"]
     }
 }
 ```
@@ -74,15 +74,15 @@ File `shapes_db.json` nằm cùng thư mục với script. Cập nhật file nà
 {
     "RAPBONGDA": {
         "path": "C:/Users/Admin/MK/RAPBONGDA.ai",
-        "BACK":   ["SHAPE1", "SHAPE2"],
-        "FRONT":  ["SHAPE1"],
-        "SLEEVE": ["SHAPE1"]
+        "SAU":   ["KIEU1", "KIEU2"],
+        "TRUOC": ["KIEU1"],
+        "TAY":   ["KIEU1"]
     },
     "RAPBONGDA_SLIM": {
         "path": "C:/Users/Admin/MK/RAPBONGDA_SLIM.ai",
-        "BACK":   ["SLIM1"],
-        "FRONT":  ["SLIM1"],
-        "SLEEVE": ["SLIM1"]
+        "SAU":   ["SLIM1"],
+        "TRUOC": ["SLIM1"],
+        "TAY":   ["SLIM1"]
     }
 }
 ```
