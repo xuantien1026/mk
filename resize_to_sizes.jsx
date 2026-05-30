@@ -2,40 +2,77 @@
 
 var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
-var BACK_SHAPE_NAMES = {
-    'S':   'S_BACK',   'M':   'M_BACK',   'L':   'L_BACK',
-    'XL':  'XL_BACK',  '2XL': '2XL_BACK', '3XL': '3XL_BACK',
-    '4XL': '4XL_BACK', '5XL': '5XL_BACK', '6XL': '6XL_BACK'
-};
-
-var FRONT_SHAPE_NAMES = {
-    'S':   'S_FRONT',   'M':   'M_FRONT',   'L':   'L_FRONT',
-    'XL':  'XL_FRONT',  '2XL': '2XL_FRONT', '3XL': '3XL_FRONT',
-    '4XL': '4XL_FRONT', '5XL': '5XL_FRONT', '6XL': '6XL_FRONT'
-};
-
-var SLEEVE_SHAPE_NAMES = {
-    'S':   'S_SLEEVE',   'M':   'M_SLEEVE',   'L':   'L_SLEEVE',
-    'XL':  'XL_SLEEVE',  '2XL': '2XL_SLEEVE', '3XL': '3XL_SLEEVE',
-    '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
-};
-
 var PT_PER_MM = 2.83465;
 
 // -------------------------------------------------------
-// Dialog: select which sizes to prepare
+// Database: load shapes_db.json from the script's folder
+// Format: { "DisplayName": { "path": "...", "BACK": [...], "FRONT": [...], "SLEEVE": [...] } }
 // -------------------------------------------------------
-function getSizes() {
-    var dlg = new Window('dialog', 'Step 1: Select Sizes to Resize');
+function loadDatabase() {
+    var dbFile = new File($.fileName.replace(/[^\/\\]+$/, 'shapes_db.json'));
+    if (!dbFile.exists) throw new Error('shapes_db.json not found next to the script.');
+    dbFile.open('r');
+    var content = dbFile.read();
+    dbFile.close();
+    return eval('(' + content + ')');
+}
+
+// -------------------------------------------------------
+// Dialog: pick outline file, shape variants, and sizes — all in one
+// -------------------------------------------------------
+function selectOptions(db) {
+    var fileNames = [];
+    for (var key in db) fileNames.push(key);
+    if (fileNames.length === 0) throw new Error('shapes_db.json contains no entries.');
+
+    var TYPES = ['BACK', 'FRONT', 'SLEEVE'];
+
+    var dlg = new Window('dialog', 'Step 1 — Resize Options');
     dlg.orientation = 'column';
     dlg.alignChildren = 'fill';
 
-    dlg.add('statictext', undefined, 'Select sizes to prepare:');
+    // File selector
+    var fileRow = dlg.add('group');
+    fileRow.orientation = 'row';
+    var fileLbl = fileRow.add('statictext', undefined, 'Outline file:');
+    fileLbl.preferredSize = [80, 20];
+    var fileDropdown = fileRow.add('dropdownlist', undefined, fileNames);
+    fileDropdown.preferredSize = [220, 20];
+    fileDropdown.selection = 0;
 
+    // Variant dropdowns (one per type)
+    var variantDropdowns = {};
+    for (var t = 0; t < TYPES.length; t++) {
+        var type = TYPES[t];
+        var row  = dlg.add('group');
+        row.orientation = 'row';
+        var lbl = row.add('statictext', undefined, type + ':');
+        lbl.preferredSize = [80, 20];
+        var dd = row.add('dropdownlist', undefined, db[fileNames[0]][type]);
+        dd.preferredSize = [220, 20];
+        dd.selection = 0;
+        variantDropdowns[type] = dd;
+    }
+
+    // Refresh variant dropdowns when the file selection changes
+    function refreshVariants() {
+        var entry = db[fileDropdown.selection.text];
+        for (var t = 0; t < TYPES.length; t++) {
+            var type = TYPES[t];
+            var dd   = variantDropdowns[type];
+            dd.removeAll();
+            for (var i = 0; i < entry[type].length; i++) dd.add('item', entry[type][i]);
+            dd.selection = 0;
+        }
+    }
+    fileDropdown.onChange = refreshVariants;
+
+    // Size checkboxes
+    var sizesPanel = dlg.add('panel', undefined, 'Sizes to prepare');
+    sizesPanel.orientation = 'row';
     var checks = {};
     for (var i = 0; i < SIZES.length; i++) {
-        var cb = dlg.add('checkbox', undefined, SIZES[i]);
-        checks[SIZES[i]] = cb;
+        checks[SIZES[i]] = sizesPanel.add('checkbox', undefined, SIZES[i]);
     }
 
     var btns = dlg.add('group');
@@ -45,11 +82,23 @@ function getSizes() {
 
     if (dlg.show() !== 1) return null;
 
-    var result = [];
+    var selectedSizes = [];
     for (var i = 0; i < SIZES.length; i++) {
-        if (checks[SIZES[i]].value) result.push(SIZES[i]);
+        if (checks[SIZES[i]].value) selectedSizes.push(SIZES[i]);
     }
-    return result;
+    if (selectedSizes.length === 0) { alert('No sizes selected.'); return null; }
+
+    var selectedEntry = db[fileDropdown.selection.text];
+    var variants = {};
+    for (var t = 0; t < TYPES.length; t++) {
+        variants[TYPES[t]] = variantDropdowns[TYPES[t]].selection.text;
+    }
+
+    return {
+        file:     new File(selectedEntry.path),
+        variants: variants,   // e.g. { BACK: 'SHAPE1', FRONT: 'SHAPE1', SLEEVE: 'SHAPE1' }
+        sizes:    selectedSizes
+    };
 }
 
 // -------------------------------------------------------
@@ -101,25 +150,25 @@ function findAllItemsByName(container, name, results) {
 // Main
 // -------------------------------------------------------
 function main() {
-    var selectedSizes = getSizes();
-    if (!selectedSizes) return;
-    if (selectedSizes.length === 0) { alert('No sizes selected. Nothing to do.'); return; }
+    var db = loadDatabase();
+
+    var options = selectOptions(db);
+    if (!options) return;
 
     var mainDoc = app.activeDocument;
-
-    var sourceFile = new File(mainDoc.fullName.parent.fsName + '/RAPBONGDA.ai');
-    if (!sourceFile.exists) throw new Error('RAPBONGDA.ai not found in: ' + mainDoc.fullName.parent.fsName);
-
-    var sourceDoc = app.open(sourceFile);
+    if (!options.file.exists) {
+        throw new Error('Khong tim thay file: ' + options.file.fsName);
+    }
+    var sourceDoc = app.open(options.file);
 
     var backShapes = {}, frontShapes = {}, sleeveShapes = {};
-    for (var s = 0; s < selectedSizes.length; s++) {
-        var sz = selectedSizes[s];
-        backShapes[sz]        = copyItemToDoc(BACK_SHAPE_NAMES[sz],   sourceDoc, mainDoc);
+    for (var s = 0; s < options.sizes.length; s++) {
+        var sz = options.sizes[s];
+        backShapes[sz]        = copyItemToDoc(sz + '_BACK_'   + options.variants.BACK,   sourceDoc, mainDoc);
         backShapes[sz].name   = sz + '_BACK_SHAPE';
-        frontShapes[sz]       = copyItemToDoc(FRONT_SHAPE_NAMES[sz],  sourceDoc, mainDoc);
+        frontShapes[sz]       = copyItemToDoc(sz + '_FRONT_'  + options.variants.FRONT,  sourceDoc, mainDoc);
         frontShapes[sz].name  = sz + '_FRONT_SHAPE';
-        sleeveShapes[sz]      = copyItemToDoc(SLEEVE_SHAPE_NAMES[sz], sourceDoc, mainDoc);
+        sleeveShapes[sz]      = copyItemToDoc(sz + '_SLEEVE_' + options.variants.SLEEVE, sourceDoc, mainDoc);
         sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
     }
 
@@ -218,8 +267,8 @@ function main() {
     var bgTop      = backDesign.position[1];
     var currentTop = bgTop;
 
-    for (var s = 0; s < selectedSizes.length; s++) {
-        var sz = selectedSizes[s];
+    for (var s = 0; s < options.sizes.length; s++) {
+        var sz = options.sizes[s];
 
         var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz, 'BACK');
         var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz, 'FRONT');
@@ -246,7 +295,7 @@ function main() {
         sleeveShapes[sz].remove();
     }
 
-    alert('Done! ' + selectedSizes.length + ' size(s) prepared on layer "SIZED_OUTPUT".\nMake manual adjustments, then run apply_names.jsx.');
+    alert('Done! ' + options.sizes.length + ' size(s) prepared on layer "SIZED_OUTPUT".\nMake manual adjustments, then run apply_names.jsx.');
 }
 
 try {
