@@ -4,6 +4,9 @@ var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
 var PT_PER_MM = 2.83465;
 
+// Shape type identifiers — must match the naming convention in the outline .ai files
+var FRONT  = 'TRUOC';
+
 // -------------------------------------------------------
 // Database: load shapes_db.json from the script's folder
 // Format: { "DisplayName": { "path": "...", "BACK": [...], "FRONT": [...], "SLEEVE": [...] } }
@@ -25,7 +28,7 @@ function selectOptions(db) {
     for (var key in db) fileNames.push(key);
     if (fileNames.length === 0) throw new Error('shapes_db.json contains no entries.');
 
-    var TYPES = ['BACK', 'FRONT', 'SLEEVE'];
+    var TYPES = ['BACK', FRONT, 'SLEEVE'];
 
     var dlg = new Window('dialog', 'Step 1 — Resize Options');
     dlg.orientation = 'column';
@@ -176,7 +179,7 @@ function main() {
         }
         backShapes[sz]        = copyItemToDoc(shapeName(sz, 'BACK',   options.variants.BACK),   sourceDoc, mainDoc);
         backShapes[sz].name   = sz + '_BACK_SHAPE';
-        frontShapes[sz]       = copyItemToDoc(shapeName(sz, 'FRONT',  options.variants.FRONT),  sourceDoc, mainDoc);
+        frontShapes[sz]       = copyItemToDoc(shapeName(sz, FRONT,    options.variants[FRONT]), sourceDoc, mainDoc);
         frontShapes[sz].name  = sz + '_FRONT_SHAPE';
         sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, 'SLEEVE', options.variants.SLEEVE), sourceDoc, mainDoc);
         sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
