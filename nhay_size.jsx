@@ -10,6 +10,11 @@ var BACK   = 'SAU';
 var FRONT  = 'TRUOC';
 var SLEEVE = 'TAY';
 
+// SIZE label layout
+var SIZE_GLYPH_HEIGHT = 2 * PT_PER_MM;  // visible glyphs scaled to exactly 2mm tall
+var SIZE_BOTTOM_GAP   = 1 * PT_PER_MM;  // glyph bottom sits 1mm above the design bottom edge
+var SIZE_SIDE_INSET   = 20 * PT_PER_MM; // horizontal inset from the near mask edge
+
 // -------------------------------------------------------
 // Database: load shapes_db.json from the script's folder
 // Format: { "DisplayName": { "path": "...", "SAU": [...], "TRUOC": [...], "TAY": [...] } }
@@ -170,6 +175,42 @@ function glyphBounds(textFrame) {
     return b;
 }
 
+// Pull the SIZE text frames out of the design BEFORE it gets scaled (so their own
+// size is preserved), stamp them with the size label, and park them on parkLayer.
+function extractSizeLabels(designCopy, sizeName, parkLayer) {
+    var labels = [];
+    var items  = findAllItemsByName(designCopy, SIZE);
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].typename === 'TextFrame') {
+            items[i].contents = sizeName;
+            items[i].move(parkLayer, ElementPlacement.PLACEATEND);
+            labels.push(items[i]);
+        }
+    }
+    return labels;
+}
+
+// Scale one SIZE label to SIZE_GLYPH_HEIGHT and place its glyph bottom SIZE_BOTTOM_GAP
+// above the design's bottom edge, inset SIZE_SIDE_INSET from the near side, then tuck
+// it back in front of the design.
+function placeSizeLabel(label, maskShape, side, designCopy) {
+    var gb     = glyphBounds(label);
+    var glyphH = gb[1] - gb[3];
+    if (glyphH > 0) {
+        var s = (SIZE_GLYPH_HEIGHT / glyphH) * 100;
+        label.resize(s, s, true, true, true, true, true, Transformation.CENTER);
+    }
+
+    var maskBottom = maskShape.position[1] - maskShape.height;
+    var bounds     = label.geometricBounds;
+    var newY = label.position[1] + (maskBottom + SIZE_BOTTOM_GAP - glyphBounds(label)[3]);
+    var newX = (side === 'FRONT')
+        ? label.position[0] + (maskShape.position[0] + maskShape.width - SIZE_SIDE_INSET - bounds[2])
+        : label.position[0] + (maskShape.position[0] + SIZE_SIDE_INSET - bounds[0]);
+    label.position = [newX, newY];
+    label.move(designCopy, ElementPlacement.PLACEBEFORE);
+}
+
 // -------------------------------------------------------
 // Main
 // -------------------------------------------------------
@@ -222,18 +263,8 @@ function main() {
         var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         designCopy.name = instanceName + '_DESIGN';
 
-        // Extract SIZE elements before scaling so their size is preserved
-        var sizeFields = [];
-        if (side !== null) {
-            var allSizeItems = findAllItemsByName(designCopy, SIZE);
-            for (var i = 0; i < allSizeItems.length; i++) {
-                if (allSizeItems[i].typename === 'TextFrame') {
-                    allSizeItems[i].contents = sizeName;
-                    allSizeItems[i].move(outputLayer, ElementPlacement.PLACEATEND);
-                    sizeFields.push(allSizeItems[i]);
-                }
-            }
-        }
+        // Extract SIZE labels before scaling so their own size is preserved
+        var sizeLabels = (side !== null) ? extractSizeLabels(designCopy, sizeName, outputLayer) : [];
 
         var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.clipped && designCopy.pageItems.length > 0)
             ? designCopy.pageItems[0]
@@ -266,30 +297,9 @@ function main() {
         clipPath.move(clipGroup, ElementPlacement.PLACEATBEGINNING);
         clipGroup.clipped = true;
 
-        // Position SIZE elements at fixed offsets from mask edges
-        var maskBottom = maskShape.position[1] - maskShape.height;
-        var SIZE_BOTTOM_GAP = 1 * PT_PER_MM; // text bottom sits 1mm above the design bottom edge
-        var SIZE_GLYPH_HEIGHT = 2 * PT_PER_MM; // visible glyphs scaled to exactly 2mm tall
-        for (var i = 0; i < sizeFields.length; i++) {
-            var sf = sizeFields[i];
-
-            // Scale the text so its visible glyphs are exactly SIZE_GLYPH_HEIGHT tall.
-            var gb      = glyphBounds(sf);
-            var glyphH  = gb[1] - gb[3];
-            if (glyphH > 0) {
-                var sizeScale = (SIZE_GLYPH_HEIGHT / glyphH) * 100;
-                sf.resize(sizeScale, sizeScale, true, true, true, true, true, Transformation.CENTER);
-            }
-
-            var sfBounds = sf.geometricBounds;
-            // Lift the true glyph bottom (not the descender-padded geometric bottom)
-            // SIZE_BOTTOM_GAP above maskBottom.
-            var sfY = sf.position[1] + (maskBottom + SIZE_BOTTOM_GAP - glyphBounds(sf)[3]);
-            var sfX = (side === 'FRONT')
-                ? sf.position[0] + (maskShape.position[0] + maskShape.width - 20 * PT_PER_MM - sfBounds[2])
-                : sf.position[0] + (maskShape.position[0] + 20 * PT_PER_MM - sfBounds[0]);
-            sf.position = [sfX, sfY];
-            sf.move(designCopy, ElementPlacement.PLACEBEFORE);
+        // Scale and position the SIZE labels relative to the masked design
+        for (var i = 0; i < sizeLabels.length; i++) {
+            placeSizeLabel(sizeLabels[i], maskShape, side, designCopy);
         }
 
         var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
