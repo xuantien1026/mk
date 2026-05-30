@@ -5,6 +5,13 @@ var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
 var PT_PER_MM = 2.83465;
 
+// Thrown when the user cancels a dialog — the outer catch ends the script silently.
+function CancelledError() {
+    this.name    = 'CancelledError';
+    this.message = 'User cancelled.';
+}
+CancelledError.prototype = new Error();
+
 // Shape type identifiers — must match the naming convention in the outline .ai files
 var BACK   = 'SAU';
 var FRONT  = 'TRUOC';
@@ -31,7 +38,9 @@ function loadDatabase() {
 // -------------------------------------------------------
 // Dialog: pick outline file, shape variants, and sizes — all in one
 // -------------------------------------------------------
-function selectOptions(db) {
+function selectOptions() {
+    var db = loadDatabase();
+
     var fileNames = [];
     for (var key in db) fileNames.push(key);
     if (fileNames.length === 0) throw new Error('shapes_db.json contains no entries.');
@@ -97,13 +106,13 @@ function selectOptions(db) {
     btns.add('button', undefined, 'OK',     {name: 'ok'});
     btns.add('button', undefined, 'Cancel', {name: 'cancel'});
 
-    if (dlg.show() !== 1) return null;
+    if (dlg.show() !== 1) throw new CancelledError();
 
     var selectedSizes = [];
     for (var i = 0; i < SIZES.length; i++) {
         if (checks[SIZES[i]].value) selectedSizes.push(SIZES[i]);
     }
-    if (selectedSizes.length === 0) { alert('No sizes selected.'); return null; }
+    if (selectedSizes.length === 0) throw new Error('Chua chon size nao.');
 
     var selectedEntry = db[fileDropdown.selection.text];
     var variants = {};
@@ -112,8 +121,11 @@ function selectOptions(db) {
         variants[TYPES[t]] = sel ? sel.text : null;
     }
 
+    var file = new File(selectedEntry.path);
+    if (!file.exists) throw new Error('Khong tim thay file: ' + file.fsName);
+
     return {
-        file:     new File(selectedEntry.path),
+        file:     file,
         variants: variants,
         sizes:    selectedSizes
     };
@@ -215,15 +227,9 @@ function placeSizeLabel(label, maskShape, side, designCopy) {
 // Main
 // -------------------------------------------------------
 function main() {
-    var db = loadDatabase();
+    var options = selectOptions();
 
-    var options = selectOptions(db);
-    if (!options) return;
-
-    var mainDoc = app.activeDocument;
-    if (!options.file.exists) {
-        throw new Error('Khong tim thay file: ' + options.file.fsName);
-    }
+    var mainDoc   = app.activeDocument;
     var sourceDoc = app.open(options.file);
 
     // Output goes to a brand-new document, not a layer in the design file.
@@ -376,8 +382,13 @@ function main() {
     alert('Hoàn thành nhảy size. Bạn có thể chỉnh sửa thiết kế, sau đó chạy bước tiếp theo: nhap_ten_so.jsx');
 }
 
-try {
-    main();
-} catch (e) {
-    alert('Error: ' + e.message + '\nLine: ' + e.line);
+function run() {
+    try {
+        main();
+    } catch (e) {
+        if (e instanceof CancelledError) return; // user cancelled — end silently
+        alert('Error: ' + e.message + '\nLine: ' + e.line);
+    }
 }
+
+run();
