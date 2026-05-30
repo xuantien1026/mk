@@ -81,6 +81,7 @@ function getOrders(sizes) {
 // -------------------------------------------------------
 // Helpers
 // -------------------------------------------------------
+
 function requireItem(collection, name, fileName) {
     try {
         return collection.getByName(name);
@@ -120,19 +121,10 @@ function main() {
 
     var mainDoc = app.activeDocument;
 
-    // Place output below the SIZED_OUTPUT content
-    var sizedLayer = requireItem(mainDoc.layers, 'SIZED_OUTPUT', mainDoc.name);
-    var backDesign = requireItem(mainDoc.pageItems, 'BACK_DESIGN', mainDoc.name);
-
-    // Place PRINT_OUTPUT to the right of SIZED_OUTPUT (same Y) to avoid
-    // exceeding Illustrator's pasteboard coordinate limits
-    var sizedRight = -Infinity;
-    for (var i = 0; i < sizedLayer.pageItems.length; i++) {
-        var r = sizedLayer.pageItems[i].geometricBounds[2];
-        if (r > sizedRight) sizedRight = r;
-    }
-    var bgLeft = sizedRight + 100;
-    var bgTop  = backDesign.position[1];
+    // Anchor to the artboard so content stays within the pasteboard
+    var artRect = mainDoc.artboards[0].artboardRect; // [left, top, right, bottom]
+    var bgLeft  = artRect[0];
+    var bgTop   = artRect[1];
 
     var outputLayer = mainDoc.layers.add();
     outputLayer.name = 'PRINT_OUTPUT';
@@ -172,11 +164,15 @@ function main() {
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
 
-    var bgWidth    = 1.6 * 1000 * PT_PER_MM;
-    var padding    = 40;
-    var spacing    = 40;
-    var currentTop = bgTop;
-    var allGroups  = [];
+    var padding        = 40;
+    var spacing        = 40;
+    var MAX_COL_HEIGHT = 5 * 1000 * PT_PER_MM; // 5 metre column height limit
+    var COLUMN_GAP     = 100;
+    var currentTop     = bgTop;
+    var columnLeft     = bgLeft;
+    var colMaxWidth    = 0;  // widest row in the current column (excludes padding)
+    var columns        = []; // {left, top, bottom, width} — one entry per strip
+    var allGroups      = [];
 
     for (var s = 0; s < preparedSizes.length; s++) {
         var sz    = preparedSizes[s];
@@ -193,13 +189,25 @@ function main() {
             var sleeveColHeight = leftSlvGrp.height + spacing + rightSlvGrp.height;
             var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
             var rowHeight       = Math.max(frontGrp.height, backGrp.height, sleeveColHeight) + padding * 2;
+
+            // Start a new column when this row would exceed the 5m height limit
+            if (bgTop - currentTop + rowHeight > MAX_COL_HEIGHT && currentTop < bgTop) {
+                columns.push({left: columnLeft, top: bgTop, bottom: currentTop, width: colMaxWidth});
+                columnLeft  += colMaxWidth + padding * 2 + COLUMN_GAP;
+                currentTop   = bgTop;
+                colMaxWidth  = 0;
+            }
+
+            // No fixed sheet width: each row is as wide as front + back + sleeves need
             var totalRowWidth   = frontGrp.width + spacing + backGrp.width + spacing + sleeveColWidth;
-            var startX          = bgLeft + (bgWidth - totalRowWidth) / 2;
+            if (totalRowWidth > colMaxWidth) colMaxWidth = totalRowWidth;
+
+            var startX          = columnLeft + padding;
             var sleeveColX      = startX + frontGrp.width + spacing + backGrp.width + spacing;
             var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
 
-            moveWithOutline(frontGrp,    startX,                                          currentTop - (rowHeight - frontGrp.height)   / 2);
-            moveWithOutline(backGrp,     startX + frontGrp.width + spacing,               currentTop - (rowHeight - backGrp.height)    / 2);
+            moveWithOutline(frontGrp,    startX,                                                currentTop - (rowHeight - frontGrp.height) / 2);
+            moveWithOutline(backGrp,     startX + frontGrp.width + spacing,                     currentTop - (rowHeight - backGrp.height)  / 2);
             moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - leftSlvGrp.width)  / 2, sleeveColTop);
             moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
 
@@ -208,16 +216,18 @@ function main() {
         }
     }
 
-    // Single continuous white background
-    var totalBgHeight = bgTop - currentTop;
-    var bg = outputLayer.pathItems.rectangle(bgTop, bgLeft, bgWidth, totalBgHeight);
-    var white = new CMYKColor();
-    white.cyan = 0; white.magenta = 0; white.yellow = 0; white.black = 0;
-    bg.fillColor = white;
-    bg.stroked   = false;
-    bg.name      = 'PRINT_BACKGROUND';
-    bg.move(outputLayer, ElementPlacement.PLACEATEND);
-
+    // One white background rectangle per column, sized to that column's widest row
+    columns.push({left: columnLeft, top: bgTop, bottom: currentTop, width: colMaxWidth});
+    for (var c = 0; c < columns.length; c++) {
+        var col = columns[c];
+        var bg = outputLayer.pathItems.rectangle(col.top, col.left, col.width + padding * 2, col.top - col.bottom);
+        var white = new CMYKColor();
+        white.cyan = 0; white.magenta = 0; white.yellow = 0; white.black = 0;
+        bg.fillColor = white;
+        bg.stroked   = false;
+        bg.name      = 'PRINT_BACKGROUND_' + (c + 1);
+        bg.move(outputLayer, ElementPlacement.PLACEATEND);
+    }
     alert('Done! Created ' + totalQty + ' shirt(s) across ' + (allGroups.length / 4) + ' row(s).');
 }
 
