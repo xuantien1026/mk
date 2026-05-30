@@ -153,6 +153,20 @@ function main() {
     var bgWidth    = options.width * 1000 * PT_PER_MM;
     var SIDES      = ['FRONT', 'BACK', 'LEFT_SLEEVE', 'RIGHT_SLEEVE'];
 
+    // Show loading palette
+    var progressWin = new Window('palette', 'Dang xu ly...');
+    progressWin.orientation = 'column';
+    progressWin.alignChildren = 'center';
+    progressWin.margins = 20;
+    var statusText = progressWin.add('statictext', undefined, 'Dang chuan bi...');
+    statusText.preferredSize = [280, 20];
+    progressWin.show();
+
+    function updateStatus(msg) {
+        statusText.text = msg;
+        progressWin.update();
+    }
+
     // Collect all design items to pack
     var items = [];
     for (var s = 0; s < options.shirts.length; s++) {
@@ -172,10 +186,12 @@ function main() {
     }
 
     // Run packing algorithm
+    updateStatus('Dang tinh toan bo cuc...');
     var packed        = packItems(items, bgWidth, MIN_GAP);
     var totalBgHeight = packed.totalHeight;
 
     // Create output document sized to the packed area
+    updateStatus('Dang tao tai lieu moi...');
     var newDoc = app.documents.add(DocumentColorSpace.CMYK, bgWidth, totalBgHeight);
     newDoc.artboards[0].artboardRect = [0, totalBgHeight, bgWidth, 0];
 
@@ -194,6 +210,7 @@ function main() {
 
     // Duplicate and position each item
     // Packing uses y-from-top; Illustrator uses Y-up, so: illustratorY = totalBgHeight - packY
+    updateStatus('Dang sao chep thiet ke...');
     for (var p = 0; p < packed.placements.length; p++) {
         var pl   = packed.placements[p];
         var item = pl.item;
@@ -214,11 +231,13 @@ function main() {
     bg.name      = 'PRINT_BACKGROUND';
     bg.move(outputLayer, ElementPlacement.PLACEATEND);
 
+    progressWin.close();
     alert('Hoan thanh! Da xep ' + items.length + ' vat the vao ban in.');
 }
 
 try {
     main();
 } catch (e) {
+    try { progressWin.close(); } catch (_) {}
     alert('Loi: ' + e.message + '\nDong: ' + e.line);
 }
