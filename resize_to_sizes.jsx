@@ -41,16 +41,20 @@ function selectOptions(db) {
     fileDropdown.selection = 0;
 
     // Variant dropdowns (one per type)
+    var variantRows      = {};
     var variantDropdowns = {};
     for (var t = 0; t < TYPES.length; t++) {
-        var type = TYPES[t];
-        var row  = dlg.add('group');
+        var type     = TYPES[t];
+        var variants = db[fileNames[0]][type] || [];
+        var row      = dlg.add('group');
         row.orientation = 'row';
         var lbl = row.add('statictext', undefined, type + ':');
         lbl.preferredSize = [80, 20];
-        var dd = row.add('dropdownlist', undefined, db[fileNames[0]][type]);
+        var dd = row.add('dropdownlist', undefined, variants);
         dd.preferredSize = [220, 20];
-        dd.selection = 0;
+        if (variants.length > 0) dd.selection = 0;
+        row.visible      = variants.length > 0;
+        variantRows[type]      = row;
         variantDropdowns[type] = dd;
     }
 
@@ -58,11 +62,13 @@ function selectOptions(db) {
     function refreshVariants() {
         var entry = db[fileDropdown.selection.text];
         for (var t = 0; t < TYPES.length; t++) {
-            var type = TYPES[t];
-            var dd   = variantDropdowns[type];
+            var type     = TYPES[t];
+            var variants = entry[type] || [];
+            var dd       = variantDropdowns[type];
             dd.removeAll();
-            for (var i = 0; i < entry[type].length; i++) dd.add('item', entry[type][i]);
-            dd.selection = 0;
+            for (var i = 0; i < variants.length; i++) dd.add('item', variants[i]);
+            if (variants.length > 0) dd.selection = 0;
+            variantRows[type].visible = variants.length > 0;
         }
     }
     fileDropdown.onChange = refreshVariants;
@@ -91,7 +97,8 @@ function selectOptions(db) {
     var selectedEntry = db[fileDropdown.selection.text];
     var variants = {};
     for (var t = 0; t < TYPES.length; t++) {
-        variants[TYPES[t]] = variantDropdowns[TYPES[t]].selection.text;
+        var sel = variantDropdowns[TYPES[t]].selection;
+        variants[TYPES[t]] = sel ? sel.text : null;
     }
 
     return {
@@ -164,11 +171,14 @@ function main() {
     var backShapes = {}, frontShapes = {}, sleeveShapes = {};
     for (var s = 0; s < options.sizes.length; s++) {
         var sz = options.sizes[s];
-        backShapes[sz]        = copyItemToDoc(sz + '_BACK_'   + options.variants.BACK,   sourceDoc, mainDoc);
+        function shapeName(sz, type, variant) {
+            return variant ? sz + '_' + type + '_' + variant : sz + '_' + type;
+        }
+        backShapes[sz]        = copyItemToDoc(shapeName(sz, 'BACK',   options.variants.BACK),   sourceDoc, mainDoc);
         backShapes[sz].name   = sz + '_BACK_SHAPE';
-        frontShapes[sz]       = copyItemToDoc(sz + '_FRONT_'  + options.variants.FRONT,  sourceDoc, mainDoc);
+        frontShapes[sz]       = copyItemToDoc(shapeName(sz, 'FRONT',  options.variants.FRONT),  sourceDoc, mainDoc);
         frontShapes[sz].name  = sz + '_FRONT_SHAPE';
-        sleeveShapes[sz]      = copyItemToDoc(sz + '_SLEEVE_' + options.variants.SLEEVE, sourceDoc, mainDoc);
+        sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, 'SLEEVE', options.variants.SLEEVE), sourceDoc, mainDoc);
         sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
     }
 

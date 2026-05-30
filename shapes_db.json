@@ -1,8 +1,6 @@
 {
     "RAPBONGDA": {
         "path": "C:/Users/Admin/MK/RAPBONGDA.ai",
-        "BACK":   ["SHAPE1", "SHAPE2"],
-        "FRONT":  ["SHAPE1"],
-        "SLEEVE": ["SHAPE1"]
+        "FRONT":  ["TRON", "TIM", "NGANG"]
     }
 }
