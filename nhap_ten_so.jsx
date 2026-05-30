@@ -1,4 +1,5 @@
 #target illustrator
+#include "lib/quy_uoc_ten.jsx"
 
 var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
@@ -141,7 +142,7 @@ function main() {
         newOutline.name = newInstanceName + '_OUTLINE';
 
         if (customerName !== null) {
-            var nameField = findItemByName(newGroup, 'CUSTOMER_NAME');
+            var nameField = findItemByName(newGroup, TEN);
             if (nameField && nameField.typename === 'TextFrame') {
                 nameField.contents = customerName;
                 var maxW      = CUSTOMER_NAME_MAX_WIDTH[sz];

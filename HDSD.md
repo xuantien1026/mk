@@ -2,23 +2,24 @@
 
 ## Quy trình
 
-Script được chia làm 2 bước:
+Script được chia làm 3 bước:
 
-1. **`resize_to_sizes.jsx`** — Tạo bản thiết kế đã resize cho từng size. Sau đó người dùng có thể điều chỉnh thủ công trước khi chuyển sang bước 2.
-2. **`apply_names.jsx`** — Nhập tên khách hàng cho từng size, tạo bản in hoàn chỉnh.
+1. **`nhay_size.jsx`** — Tạo bản thiết kế đã resize cho từng size. Sau đó người dùng có thể điều chỉnh thủ công trước khi chuyển sang bước 2.
+2. **`nhap_ten_so.jsx`** — Nhập tên khách hàng & số cho từng size, tạo bản in hoàn chỉnh.
+3. **`xep_bo_cuc_in.jsx`** — Lựa chọn thiết kế để in & nhập khổ in => máy tính tự động sắp xếp thiết kế vào khổ in theo phương án tối ưu
 
 ---
 
 ## Quy ước đặt tên trong file Illustrator thiết kế
 
-| Tên element       | Mô tả                                              |
-|-------------------|----------------------------------------------------|
-| `BACK_DESIGN`     | Group thiết kế mặt sau (size L gốc)               |
-| `FRONT_DESIGN`    | Group thiết kế mặt trước (size L gốc)             |
-| `LEFT_SLEEVE`     | Group thiết kế tay trái (size L gốc)              |
-| `RIGHT_SLEEVE`    | Group thiết kế tay phải (size L gốc)              |
-| `CUSTOMER_NAME`   | Text frame chứa tên khách hàng (trong BACK_DESIGN) |
-| `SIZE`            | Text frame chứa size (có thể xuất hiện nhiều lần) |
+| Tên element   | Mô tả                                              |
+|---------------|----------------------------------------------------|
+| `THAN_TRUOC`  | Group thiết kế mặt sau (size L gốc)                |
+| `THAN_SAU`    | Group thiết kế mặt trước (size L gốc)              |
+| `TAY_TRAI`    | Group thiết kế tay trái (size L gốc)               |
+| `TAY_PHAI`    | Group thiết kế tay phải (size L gốc)               |
+| `TEN`         | Text frame chứa tên khách hàng                     |
+| `SIZE`        | Text frame chứa size                               |
 
 ---
 

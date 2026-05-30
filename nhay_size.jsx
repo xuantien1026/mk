@@ -1,4 +1,5 @@
 #target illustrator
+#include "lib/quy_uoc_ten.jsx"
 
 var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
@@ -200,10 +201,10 @@ function main() {
 
     sourceDoc.close(SaveOptions.DONOTSAVECHANGES);
 
-    var backDesign  = requireItem(mainDoc.pageItems, 'BACK_DESIGN',  mainDoc.name);
-    var frontDesign = requireItem(mainDoc.pageItems, 'FRONT_DESIGN', mainDoc.name);
-    var leftSleeve  = requireItem(mainDoc.pageItems, 'LEFT_SLEEVE',  mainDoc.name);
-    var rightSleeve = requireItem(mainDoc.pageItems, 'RIGHT_SLEEVE', mainDoc.name);
+    var frontDesign  = requireItem(mainDoc.pageItems, THAN_TRUOC, mainDoc.name);
+    var backDesign = requireItem(mainDoc.pageItems, THAN_SAU,   mainDoc.name);
+    var leftSleeve  = requireItem(mainDoc.pageItems, TAY_TRAI,   mainDoc.name);
+    var rightSleeve = requireItem(mainDoc.pageItems, TAY_PHAI,   mainDoc.name);
 
     // side: 'FRONT' | 'BACK' | null (sleeve)
     function resizeAndMask(design, maskShape, instanceName, sizeName, side) {
@@ -213,7 +214,7 @@ function main() {
         // Extract SIZE elements before scaling so their size is preserved
         var sizeFields = [];
         if (side !== null) {
-            var allSizeItems = findAllItemsByName(designCopy, 'SIZE');
+            var allSizeItems = findAllItemsByName(designCopy, SIZE);
             for (var i = 0; i < allSizeItems.length; i++) {
                 if (allSizeItems[i].typename === 'TextFrame') {
                     allSizeItems[i].contents = sizeName;
@@ -338,10 +339,7 @@ function main() {
     }
 
     app.activeDocument = outDoc;
-    // Show the transparency grid so the artboard reads as an empty/transparent
-    // background instead of solid white.
-    try { app.executeMenuCommand('TransparencyGrid'); } catch (e) {}
-    alert('Done! ' + options.sizes.length + ' size(s) prepared in a new document (layer "SIZED_OUTPUT").\nMake manual adjustments and save, then run apply_names.jsx on it.');
+    alert('Hoàn thành nhảy size. Bạn có thể chỉnh sửa thiết kế, sau đó chạy bước tiếp theo: nhap_ten_so.jsx');
 }
 
 try {
