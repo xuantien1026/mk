@@ -290,8 +290,11 @@ function main() {
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var padding    = 40;
     var spacing    = 40;
+    // Anchor the output to the top edge of the artboard so the vertical stack has
+    // maximum room before hitting Illustrator's pasteboard coordinate limit (the
+    // point where geometry gets clamped, which corrupts the lower sizes).
     var bgLeft     = backDesign.position[0] + backDesign.width + 60;
-    var bgTop      = backDesign.position[1];
+    var bgTop      = mainDoc.artboards[0].artboardRect[1];
     var currentTop = bgTop;
 
     for (var s = 0; s < options.sizes.length; s++) {
