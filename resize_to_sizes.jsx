@@ -20,43 +20,22 @@ var SLEEVE_SHAPE_NAMES = {
     '4XL': '4XL_SLEEVE', '5XL': '5XL_SLEEVE', '6XL': '6XL_SLEEVE'
 };
 
-var CUSTOMER_NAME_MAX_WIDTH = {
-    'S':   29.5 * 10 * PT_PER_MM,
-    'M':   31.0 * 10 * PT_PER_MM,
-    'L':   32.5 * 10 * PT_PER_MM,
-    'XL':  34.0 * 10 * PT_PER_MM,
-    '2XL': 35.5 * 10 * PT_PER_MM,
-    '3XL': 37.0 * 10 * PT_PER_MM,
-    '4XL': 38.5 * 10 * PT_PER_MM,
-    '5XL': 40.0 * 10 * PT_PER_MM,
-    '6XL': 41.5 * 10 * PT_PER_MM
-};
+var PT_PER_MM = 2.83465;
 
 // -------------------------------------------------------
-// Dialog: collect customer names per size
+// Dialog: select which sizes to prepare
 // -------------------------------------------------------
-function getOrders() {
-
-    var dlg = new Window('dialog', 'T-Shirt Orders');
+function getSizes() {
+    var dlg = new Window('dialog', 'Step 1: Select Sizes to Resize');
     dlg.orientation = 'column';
     dlg.alignChildren = 'fill';
 
-    var header = dlg.add('group');
-    header.orientation = 'row';
-    var h1 = header.add('statictext', undefined, 'Size');
-    h1.preferredSize = [45, 20];
-    var h2 = header.add('statictext', undefined, 'Customer Names (comma-separated)');
-    h2.preferredSize = [260, 20];
+    dlg.add('statictext', undefined, 'Select sizes to prepare:');
 
-    var inputs = {};
+    var checks = {};
     for (var i = 0; i < SIZES.length; i++) {
-        var row = dlg.add('group');
-        row.orientation = 'row';
-        var lbl = row.add('statictext', undefined, SIZES[i] + ':');
-        lbl.preferredSize = [45, 20];
-        var inp = row.add('edittext', undefined, '');
-        inp.preferredSize = [260, 20];
-        inputs[SIZES[i]] = inp;
+        var cb = dlg.add('checkbox', undefined, SIZES[i]);
+        checks[SIZES[i]] = cb;
     }
 
     var btns = dlg.add('group');
@@ -66,23 +45,15 @@ function getOrders() {
 
     if (dlg.show() !== 1) return null;
 
-    function trim(s) { return s.replace(/^\s+|\s+$/g, ''); }
-
-    var result = {};
+    var result = [];
     for (var i = 0; i < SIZES.length; i++) {
-        var parts = inputs[SIZES[i]].text.split(',');
-        var names = [];
-        for (var j = 0; j < parts.length; j++) {
-            var n = trim(parts[j]);
-            if (n !== '') names.push(n);
-        }
-        result[SIZES[i]] = names;
+        if (checks[SIZES[i]].value) result.push(SIZES[i]);
     }
     return result;
 }
 
 // -------------------------------------------------------
-// Main
+// Helpers
 // -------------------------------------------------------
 function requireItem(collection, name, fileName) {
     try {
@@ -126,49 +97,35 @@ function findAllItemsByName(container, name, results) {
     return results;
 }
 
-var PT_PER_MM = 2.83465;
-
+// -------------------------------------------------------
+// Main
+// -------------------------------------------------------
 function main() {
-    var orders = getOrders();
-    if (!orders) return; // user cancelled
-
-    var totalQty = 0;
-    for (var s = 0; s < SIZES.length; s++) totalQty += orders[SIZES[s]].length;
-    if (totalQty === 0) { alert('No names entered. Nothing to do.'); return; }
+    var selectedSizes = getSizes();
+    if (!selectedSizes) return;
+    if (selectedSizes.length === 0) { alert('No sizes selected. Nothing to do.'); return; }
 
     var mainDoc = app.activeDocument;
 
-    // -------------------------------------------------------
-    // Step 1: Copy needed shapes from RAPBONGDA.ai
-    // -------------------------------------------------------
     var sourceFile = new File(mainDoc.fullName.parent.fsName + '/RAPBONGDA.ai');
-    if (!sourceFile.exists) {
-        throw new Error('RAPBONGDA.ai not found in: ' + mainDoc.fullName.parent.fsName);
-    }
+    if (!sourceFile.exists) throw new Error('RAPBONGDA.ai not found in: ' + mainDoc.fullName.parent.fsName);
 
     var sourceDoc = app.open(sourceFile);
 
-    var backShapes   = {};
-    var frontShapes  = {};
-    var sleeveShapes = {};
-    for (var s = 0; s < SIZES.length; s++) {
-        var sz = SIZES[s];
-        if (orders[sz].length > 0) {
-            backShapes[sz]        = copyItemToDoc(BACK_SHAPE_NAMES[sz],   sourceDoc, mainDoc);
-            backShapes[sz].name   = sz + '_BACK_SHAPE';
-            frontShapes[sz]       = copyItemToDoc(FRONT_SHAPE_NAMES[sz],  sourceDoc, mainDoc);
-            frontShapes[sz].name  = sz + '_FRONT_SHAPE';
-            sleeveShapes[sz]      = copyItemToDoc(SLEEVE_SHAPE_NAMES[sz], sourceDoc, mainDoc);
-            sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
-        }
+    var backShapes = {}, frontShapes = {}, sleeveShapes = {};
+    for (var s = 0; s < selectedSizes.length; s++) {
+        var sz = selectedSizes[s];
+        backShapes[sz]        = copyItemToDoc(BACK_SHAPE_NAMES[sz],   sourceDoc, mainDoc);
+        backShapes[sz].name   = sz + '_BACK_SHAPE';
+        frontShapes[sz]       = copyItemToDoc(FRONT_SHAPE_NAMES[sz],  sourceDoc, mainDoc);
+        frontShapes[sz].name  = sz + '_FRONT_SHAPE';
+        sleeveShapes[sz]      = copyItemToDoc(SLEEVE_SHAPE_NAMES[sz], sourceDoc, mainDoc);
+        sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
     }
 
     sourceDoc.close(SaveOptions.DONOTSAVECHANGES);
     app.activeDocument = mainDoc;
 
-    // -------------------------------------------------------
-    // Step 2: Set up output layer and designs
-    // -------------------------------------------------------
     var outputLayer = mainDoc.layers.add();
     outputLayer.name = 'SIZED_OUTPUT';
 
@@ -177,23 +134,10 @@ function main() {
     var leftSleeve  = requireItem(mainDoc.pageItems, 'LEFT_SLEEVE',  mainDoc.name);
     var rightSleeve = requireItem(mainDoc.pageItems, 'RIGHT_SLEEVE', mainDoc.name);
 
-    // side: 'FRONT' | 'BACK' | null (sleeve — no SIZE element)
-    function resizeAndMask(design, maskShape, instanceName, customerName, sizeName, side) {
+    // side: 'FRONT' | 'BACK' | null (sleeve)
+    function resizeAndMask(design, maskShape, instanceName, sizeName, side) {
         var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         designCopy.name = instanceName + '_DESIGN';
-
-        if (customerName !== null) {
-            var nameField = findItemByName(designCopy, 'CUSTOMER_NAME');
-            if (nameField && nameField.typename === 'TextFrame') {
-                nameField.contents = customerName;
-                var maxW      = CUSTOMER_NAME_MAX_WIDTH[sizeName];
-                var nameBounds = nameField.geometricBounds;
-                var nameWidth  = nameBounds[2] - nameBounds[0];
-                if (maxW && nameWidth > maxW) {
-                    nameField.resize((maxW / nameWidth) * 100, 100, true, true, true, true, false, Transformation.CENTER);
-                }
-            }
-        }
 
         // Extract SIZE elements before scaling so their size is preserved
         var sizeFields = [];
@@ -243,10 +187,8 @@ function main() {
         var maskBottom = maskShape.position[1] - maskShape.height;
         for (var i = 0; i < sizeFields.length; i++) {
             var sf       = sizeFields[i];
-            var sfBounds = sf.geometricBounds; // [left, top, right, bottom]
-            // Align rendered bottom flush with mask bottom edge
+            var sfBounds = sf.geometricBounds;
             var sfY = sf.position[1] + (maskBottom - sfBounds[3]);
-            // Shift position so rendered edge lands exactly 2cm from mask side edge
             var sfX = (side === 'FRONT')
                 ? sf.position[0] + (maskShape.position[0] + maskShape.width - 20 * PT_PER_MM - sfBounds[2])
                 : sf.position[0] + (maskShape.position[0] + 20 * PT_PER_MM - sfBounds[0]);
@@ -269,64 +211,42 @@ function main() {
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
 
-    // -------------------------------------------------------
-    // Step 3: Generate one row per copy — front, back, sleeves
-    // -------------------------------------------------------
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var padding    = 40;
     var spacing    = 40;
     var bgLeft     = backDesign.position[0] + backDesign.width + 60;
     var bgTop      = backDesign.position[1];
     var currentTop = bgTop;
-    var allGroups  = [];
 
-    for (var s = 0; s < SIZES.length; s++) {
-        var sz    = SIZES[s];
-        var names = orders[sz];
-        if (names.length === 0) continue;
+    for (var s = 0; s < selectedSizes.length; s++) {
+        var sz = selectedSizes[s];
 
-        for (var q = 0; q < names.length; q++) {
-            var prefix      = sz + '_' + (q + 1);
-            var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   prefix + '_BACK',         names[q], sz, 'BACK');
-            var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  prefix + '_FRONT',        null,     sz, 'FRONT');
-            var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], prefix + '_LEFT_SLEEVE',  null,     sz, null);
-            var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapes[sz], prefix + '_RIGHT_SLEEVE', null,     sz, null);
+        var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz, 'BACK');
+        var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz, 'FRONT');
+        var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, null);
+        var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapes[sz], sz + '_RIGHT_SLEEVE', sz, null);
 
-            var sleeveColHeight = leftSlvGrp.height + spacing + rightSlvGrp.height;
-            var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
-            var rowHeight       = Math.max(frontGrp.height, backGrp.height, sleeveColHeight) + padding * 2;
-            var totalRowWidth   = frontGrp.width + spacing + backGrp.width + spacing + sleeveColWidth;
-            var startX          = bgLeft + (bgWidth - totalRowWidth) / 2;
-            var sleeveColX      = startX + frontGrp.width + spacing + backGrp.width + spacing;
-            var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
+        var sleeveColHeight = leftSlvGrp.height + spacing + rightSlvGrp.height;
+        var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
+        var rowHeight       = Math.max(frontGrp.height, backGrp.height, sleeveColHeight) + padding * 2;
+        var totalRowWidth   = frontGrp.width + spacing + backGrp.width + spacing + sleeveColWidth;
+        var startX          = bgLeft + (bgWidth - totalRowWidth) / 2;
+        var sleeveColX      = startX + frontGrp.width + spacing + backGrp.width + spacing;
+        var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
 
-            moveWithOutline(frontGrp,    startX,                                          currentTop - (rowHeight - frontGrp.height)   / 2);
-            moveWithOutline(backGrp,     startX + frontGrp.width + spacing,               currentTop - (rowHeight - backGrp.height)    / 2);
-            moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - leftSlvGrp.width)  / 2, sleeveColTop);
-            moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
+        moveWithOutline(frontGrp,    startX,                                          currentTop - (rowHeight - frontGrp.height)   / 2);
+        moveWithOutline(backGrp,     startX + frontGrp.width + spacing,               currentTop - (rowHeight - backGrp.height)    / 2);
+        moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - leftSlvGrp.width)  / 2, sleeveColTop);
+        moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
 
-            currentTop -= rowHeight;
-            allGroups.push(frontGrp, backGrp, leftSlvGrp, rightSlvGrp);
-        }
+        currentTop -= rowHeight;
 
-        frontShapes[sz].remove();
         backShapes[sz].remove();
+        frontShapes[sz].remove();
         sleeveShapes[sz].remove();
     }
 
-    // -------------------------------------------------------
-    // Step 4: Single continuous white background
-    // -------------------------------------------------------
-    var totalBgHeight = bgTop - currentTop;
-    var bg = outputLayer.pathItems.rectangle(bgTop, bgLeft, bgWidth, totalBgHeight);
-    var white = new CMYKColor();
-    white.cyan = 0; white.magenta = 0; white.yellow = 0; white.black = 0;
-    bg.fillColor = white;
-    bg.stroked   = false;
-    bg.name      = 'PRINT_BACKGROUND';
-    bg.move(outputLayer, ElementPlacement.PLACEATEND);
-
-    alert('Done! Created ' + totalQty + ' shirt(s) across ' + (allGroups.length / 4) + ' row(s).');
+    alert('Done! ' + selectedSizes.length + ' size(s) prepared on layer "SIZED_OUTPUT".\nMake manual adjustments, then run apply_names.jsx.');
 }
 
 try {
