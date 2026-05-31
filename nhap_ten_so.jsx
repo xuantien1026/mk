@@ -257,10 +257,23 @@ function main() {
         return newGroup;
     }
 
+    // A clipped group's raw bounds include artwork hidden by the mask; the clip path
+    // (pageItems[0]) is the true visible extent. Measure that for layout/sizing.
+    function visBounds(group) {
+        var p = (group.typename === 'GroupItem' && group.clipped && group.pageItems.length > 0)
+            ? group.pageItems[0]
+            : group;
+        var b = p.geometricBounds; // [left, top, right, bottom]
+        return { left: b[0], top: b[1], width: b[2] - b[0], height: b[1] - b[3] };
+    }
+
+    // Move a clip group so its VISIBLE top-left lands at (newX, newY); the matching
+    // _OUTLINE shifts by the same delta.
     function moveWithOutline(group, newX, newY) {
-        var deltaX = newX - group.position[0];
-        var deltaY = newY - group.position[1];
-        group.position = [newX, newY];
+        var vb = visBounds(group);
+        var deltaX = newX - vb.left;
+        var deltaY = newY - vb.top;
+        group.position = [group.position[0] + deltaX, group.position[1] + deltaY];
         var outline = mainDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
@@ -275,30 +288,33 @@ function main() {
     // Arrange the shirt parts: front | back, with the two sleeves stacked in a column
     // to the right. Returns the content size and a placement callback.
     function layoutShirt(frontGrp, backGrp, leftSlvGrp, rightSlvGrp) {
-        var sleeveColH = leftSlvGrp.height + spacing + rightSlvGrp.height;
-        var sleeveColW = Math.max(leftSlvGrp.width, rightSlvGrp.width);
+        var f = visBounds(frontGrp), b = visBounds(backGrp);
+        var ls = visBounds(leftSlvGrp), rs = visBounds(rightSlvGrp);
+        var sleeveColH = ls.height + spacing + rs.height;
+        var sleeveColW = Math.max(ls.width, rs.width);
         return {
-            width:  frontGrp.width + spacing + backGrp.width + spacing + sleeveColW,
-            height: Math.max(frontGrp.height, backGrp.height, sleeveColH),
+            width:  f.width + spacing + b.width + spacing + sleeveColW,
+            height: Math.max(f.height, b.height, sleeveColH),
             place: function (startX, top, contentH) {
-                var sleeveColX   = startX + frontGrp.width + spacing + backGrp.width + spacing;
+                var sleeveColX   = startX + f.width + spacing + b.width + spacing;
                 var sleeveColTop = top - (contentH - sleeveColH) / 2;
-                moveWithOutline(frontGrp,    startX,                                            top - (contentH - frontGrp.height) / 2);
-                moveWithOutline(backGrp,     startX + frontGrp.width + spacing,                 top - (contentH - backGrp.height)  / 2);
-                moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColW - leftSlvGrp.width)  / 2, sleeveColTop);
-                moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColW - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
+                moveWithOutline(frontGrp,    startX,                                 top - (contentH - f.height) / 2);
+                moveWithOutline(backGrp,     startX + f.width + spacing,             top - (contentH - b.height) / 2);
+                moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColW - ls.width)/2, sleeveColTop);
+                moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColW - rs.width)/2, sleeveColTop - ls.height - spacing);
             }
         };
     }
 
     // Arrange the pant parts: left | right side by side.
     function layoutPant(leftPantGrp, rightPantGrp) {
+        var l = visBounds(leftPantGrp), r = visBounds(rightPantGrp);
         return {
-            width:  leftPantGrp.width + spacing + rightPantGrp.width,
-            height: Math.max(leftPantGrp.height, rightPantGrp.height),
+            width:  l.width + spacing + r.width,
+            height: Math.max(l.height, r.height),
             place: function (startX, top, contentH) {
-                moveWithOutline(leftPantGrp,  startX,                               top - (contentH - leftPantGrp.height)  / 2);
-                moveWithOutline(rightPantGrp, startX + leftPantGrp.width + spacing, top - (contentH - rightPantGrp.height) / 2);
+                moveWithOutline(leftPantGrp,  startX,                     top - (contentH - l.height) / 2);
+                moveWithOutline(rightPantGrp, startX + l.width + spacing, top - (contentH - r.height) / 2);
             }
         };
     }
