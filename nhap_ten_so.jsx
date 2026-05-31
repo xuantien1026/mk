@@ -229,32 +229,31 @@ function main() {
     for (var k in orders) totalQty += orders[k].length;
     if (totalQty === 0) { alert('Khong co don hang nao khop size da chuan bi.'); return; }
 
-    var mainDoc = app.activeDocument;
+    var sourceDoc  = app.activeDocument;             // the Step-1 masters document
+    var colorSpace = sourceDoc.documentColorSpace;
 
-    // Anchor to the artboard so content stays within the pasteboard
-    var artRect = mainDoc.artboards[0].artboardRect; // [left, top, right, bottom]
-    var bgLeft  = artRect[0];
-    var bgTop   = artRect[1];
+    var CANVAS     = 5.77 * 1000 * PT_PER_MM; // one fresh AI document's canvas (~5.77m square)
+    if (artboardWidth > CANVAS) { alert('Khổ in quá lớn — tối đa khoảng 5.7 mét.'); return; }
+    var padding    = 40;
+    var spacing    = 40;
+    var COLUMN_GAP = 100;
 
-    var outputLayer = mainDoc.layers.add();
-    outputLayer.name = 'PRINT_OUTPUT';
+    // Output-document state — reset by startNewDoc().
+    var outDoc, outLayer, currentTop, columnLeft, docCount = 0;
 
-    // Duplicate one of the Step 1 resized designs and apply the customer name
-    function duplicateDesign(sz, side, newInstanceName, name, number) {
-        var sourceFinal   = requireItem(mainDoc.pageItems, sz + '_' + side + '_FINAL',   mainDoc.name);
-        var sourceOutline = requireItem(mainDoc.pageItems, sz + '_' + side + '_OUTLINE', mainDoc.name);
+    function startNewDoc() {
+        outDoc = app.documents.add(colorSpace, CANVAS, CANVAS);
+        outDoc.artboards[0].artboardRect = [0, CANVAS, CANVAS, 0];
+        outLayer = outDoc.layers[0];
+        outLayer.name = 'PRINT_OUTPUT';
+        currentTop = CANVAS; // top edge of the stack
+        columnLeft = 0;      // left edge of the current column
+        docCount++;
+    }
 
-        var newGroup   = sourceFinal.duplicate(outputLayer, ElementPlacement.PLACEATEND);
-        newGroup.name  = newInstanceName + '_FINAL';
-
-        var newOutline  = sourceOutline.duplicate(outputLayer, ElementPlacement.PLACEATEND);
-        newOutline.name = newInstanceName + '_OUTLINE';
-
-        // Fill the name/number wherever those frames appear; remove them when blank.
-        applyField(newGroup, TEN, name,   CUSTOMER_NAME_MAX_WIDTH[sz]);
-        applyField(newGroup, SO,  number, null);
-
-        return newGroup;
+    function finishDoc() {
+        // Drop the default full-canvas artboard so only product artboards remain.
+        if (outDoc.artboards.length > 1) outDoc.artboards.remove(0);
     }
 
     // A clipped group's raw bounds include artwork hidden by the mask; the clip path
@@ -267,6 +266,24 @@ function main() {
         return { left: b[0], top: b[1], width: b[2] - b[0], height: b[1] - b[3] };
     }
 
+    // Visible size of a Step-1 master part — identical to its duplicate's, so we can
+    // measure (and decide page breaks) before duplicating.
+    function srcVB(sz, side) {
+        return visBounds(requireItem(sourceDoc.pageItems, sz + '_' + side + '_FINAL', sourceDoc.name));
+    }
+
+    // Duplicate a Step-1 master (and its outline) into the current output document,
+    // stamping the name/number wherever those frames appear (removing them when blank).
+    function dup(sz, side, instanceName, name, number) {
+        var sf = requireItem(sourceDoc.pageItems, sz + '_' + side + '_FINAL',   sourceDoc.name);
+        var so = requireItem(sourceDoc.pageItems, sz + '_' + side + '_OUTLINE', sourceDoc.name);
+        var g = sf.duplicate(outLayer, ElementPlacement.PLACEATEND); g.name = instanceName + '_FINAL';
+        var o = so.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
+        applyField(g, TEN, name,   CUSTOMER_NAME_MAX_WIDTH[sz]);
+        applyField(g, SO,  number, null);
+        return g;
+    }
+
     // Move a clip group so its VISIBLE top-left lands at (newX, newY); the matching
     // _OUTLINE shifts by the same delta.
     function moveWithOutline(group, newX, newY) {
@@ -274,93 +291,88 @@ function main() {
         var deltaX = newX - vb.left;
         var deltaY = newY - vb.top;
         group.position = [group.position[0] + deltaX, group.position[1] + deltaY];
-        var outline = mainDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
+        var outline = outDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
 
-    var padding        = 40;
-    var spacing        = 40;
-    var MAX_COL_HEIGHT = 5 * 1000 * PT_PER_MM; // 5 metre column height limit
-    var COLUMN_GAP     = 100;
-    var currentTop     = bgTop;
-    var columnLeft     = bgLeft;
+    // Reserve a slot of height artH: drop down the current column, move to the next
+    // column when it overflows, and start a new document when the canvas width is full.
+    function reserve(artH) {
+        if (currentTop < CANVAS && artH > currentTop) {        // column full
+            var nextLeft = columnLeft + artboardWidth + COLUMN_GAP;
+            if (nextLeft + artboardWidth > CANVAS) {           // no more columns → new document
+                finishDoc();
+                startNewDoc();
+            } else {
+                columnLeft = nextLeft;
+                currentTop = CANVAS;
+            }
+        }
+        var slot = { left: columnLeft, top: currentTop };
+        currentTop -= artH;
+        return slot;
+    }
 
-    // Arrange the shirt parts: front | back, with the two sleeves stacked in a column
-    // to the right. Returns the content size and a placement callback.
-    function layoutShirt(frontGrp, backGrp, leftSlvGrp, rightSlvGrp) {
-        var f = visBounds(frontGrp), b = visBounds(backGrp);
-        var ls = visBounds(leftSlvGrp), rs = visBounds(rightSlvGrp);
+    // Shirt artboard: front | back, with the two sleeves stacked in a column to the right.
+    function emitShirt(sz, prefix, name, number) {
+        var f = srcVB(sz, 'FRONT'), b = srcVB(sz, 'BACK');
+        var ls = srcVB(sz, 'LEFT_SLEEVE'), rs = srcVB(sz, 'RIGHT_SLEEVE');
         var sleeveColH = ls.height + spacing + rs.height;
         var sleeveColW = Math.max(ls.width, rs.width);
-        return {
-            width:  f.width + spacing + b.width + spacing + sleeveColW,
-            height: Math.max(f.height, b.height, sleeveColH),
-            place: function (startX, top, contentH) {
-                var sleeveColX   = startX + f.width + spacing + b.width + spacing;
-                var sleeveColTop = top - (contentH - sleeveColH) / 2;
-                moveWithOutline(frontGrp,    startX,                                 top - (contentH - f.height) / 2);
-                moveWithOutline(backGrp,     startX + f.width + spacing,             top - (contentH - b.height) / 2);
-                moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColW - ls.width)/2, sleeveColTop);
-                moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColW - rs.width)/2, sleeveColTop - ls.height - spacing);
-            }
-        };
+        var contentW = f.width + spacing + b.width + spacing + sleeveColW;
+        var contentH = Math.max(f.height, b.height, sleeveColH);
+        var slot = reserve(contentH + padding * 2);
+
+        var frontGrp    = dup(sz, 'FRONT',        prefix + '_FRONT',        name, number);
+        var backGrp     = dup(sz, 'BACK',         prefix + '_BACK',         name, number);
+        var leftSlvGrp  = dup(sz, 'LEFT_SLEEVE',  prefix + '_LEFT_SLEEVE',  name, number);
+        var rightSlvGrp = dup(sz, 'RIGHT_SLEEVE', prefix + '_RIGHT_SLEEVE', name, number);
+
+        var startX = slot.left + (artboardWidth - contentW) / 2;
+        var top    = slot.top - padding;
+        var sleeveColX   = startX + f.width + spacing + b.width + spacing;
+        var sleeveColTop = top - (contentH - sleeveColH) / 2;
+        moveWithOutline(frontGrp,    startX,                                 top - (contentH - f.height) / 2);
+        moveWithOutline(backGrp,     startX + f.width + spacing,             top - (contentH - b.height) / 2);
+        moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColW - ls.width)/2, sleeveColTop);
+        moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColW - rs.width)/2, sleeveColTop - ls.height - spacing);
+
+        outDoc.artboards.add([slot.left, slot.top, slot.left + artboardWidth, slot.top - (contentH + padding * 2)]).name = prefix + '_SHIRT';
     }
 
-    // Arrange the pant parts: left | right side by side.
-    function layoutPant(leftPantGrp, rightPantGrp) {
-        var l = visBounds(leftPantGrp), r = visBounds(rightPantGrp);
-        return {
-            width:  l.width + spacing + r.width,
-            height: Math.max(l.height, r.height),
-            place: function (startX, top, contentH) {
-                moveWithOutline(leftPantGrp,  startX,                     top - (contentH - l.height) / 2);
-                moveWithOutline(rightPantGrp, startX + l.width + spacing, top - (contentH - r.height) / 2);
-            }
-        };
+    // Pant artboard: left | right side by side.
+    function emitPant(sz, prefix, name, number) {
+        var l = srcVB(sz, 'LEFT_PANT'), r = srcVB(sz, 'RIGHT_PANT');
+        var contentW = l.width + spacing + r.width;
+        var contentH = Math.max(l.height, r.height);
+        var slot = reserve(contentH + padding * 2);
+
+        var leftPantGrp  = dup(sz, 'LEFT_PANT',  prefix + '_LEFT_PANT',  name, number);
+        var rightPantGrp = dup(sz, 'RIGHT_PANT', prefix + '_RIGHT_PANT', name, number);
+
+        var startX = slot.left + (artboardWidth - contentW) / 2;
+        var top    = slot.top - padding;
+        moveWithOutline(leftPantGrp,  startX,                     top - (contentH - l.height) / 2);
+        moveWithOutline(rightPantGrp, startX + l.width + spacing, top - (contentH - r.height) / 2);
+
+        outDoc.artboards.add([slot.left, slot.top, slot.left + artboardWidth, slot.top - (contentH + padding * 2)]).name = prefix + '_PANT';
     }
 
-    // Place one part-set on its own artboard of fixed width, stacking down the current
-    // column and breaking to a new column past MAX_COL_HEIGHT.
-    function emitArtboard(layout, artName) {
-        var artH = layout.height + padding * 2;
-        if (currentTop < bgTop && (bgTop - currentTop + artH) > MAX_COL_HEIGHT) {
-            columnLeft += artboardWidth + COLUMN_GAP;
-            currentTop  = bgTop;
-        }
-        var startX = columnLeft + (artboardWidth - layout.width) / 2;
-        layout.place(startX, currentTop - padding, layout.height);
-        mainDoc.artboards.add([columnLeft, currentTop, columnLeft + artboardWidth, currentTop - artH]).name = artName;
-        currentTop -= artH;
-    }
-
+    startNewDoc();
     for (var s = 0; s < preparedSizes.length; s++) {
         var sz   = preparedSizes[s];
         var list = orders[sz];
         if (!list) continue;
 
         for (var q = 0; q < list.length; q++) {
-            var name   = list[q].name;
-            var number = list[q].number;
             var prefix = sz + '_' + (q + 1);
-
-            var frontGrp     = duplicateDesign(sz, 'FRONT',        prefix + '_FRONT',        name, number);
-            var backGrp      = duplicateDesign(sz, 'BACK',         prefix + '_BACK',         name, number);
-            var leftSlvGrp   = duplicateDesign(sz, 'LEFT_SLEEVE',  prefix + '_LEFT_SLEEVE',  name, number);
-            var rightSlvGrp  = duplicateDesign(sz, 'RIGHT_SLEEVE', prefix + '_RIGHT_SLEEVE', name, number);
-            var leftPantGrp  = duplicateDesign(sz, 'LEFT_PANT',    prefix + '_LEFT_PANT',    name, number);
-            var rightPantGrp = duplicateDesign(sz, 'RIGHT_PANT',   prefix + '_RIGHT_PANT',   name, number);
-
-            emitArtboard(layoutShirt(frontGrp, backGrp, leftSlvGrp, rightSlvGrp), prefix + '_SHIRT');
-            emitArtboard(layoutPant(leftPantGrp, rightPantGrp),                   prefix + '_PANT');
+            emitShirt(sz, prefix, list[q].name, list[q].number);
+            emitPant(sz,  prefix, list[q].name, list[q].number);
         }
     }
+    finishDoc();
 
-    // Drop the giant Step-1 canvas artboard so only the product artboards remain, and
-    // hide the Step-1 masters so they don't bleed into the product artboards on export.
-    mainDoc.artboards.remove(0);
-    try { mainDoc.layers.getByName('SIZED_OUTPUT').visible = false; } catch (e) {}
-
-    alert('Hoàn thành!');
+    alert('Hoàn thành! Đã tạo ' + docCount + ' file.');
 }
 
 try {
