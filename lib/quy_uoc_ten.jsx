@@ -5,4 +5,5 @@ var THAN_SAU   = 'THAN_SAU';
 var TAY_TRAI   = 'TAY_TRAI';
 var TAY_PHAI   = 'TAY_PHAI';
 var TEN        = 'TEN';
+var SO         = 'SO';
 var SIZE       = 'SIZE';

@@ -187,7 +187,11 @@
       </tr>
       <tr>
         <td><code>TEN</code></td>
-        <td>Text frame chứa tên khách hàng</td>
+        <td>Text frame chứa tên khách hàng (có thể bỏ trống)</td>
+      </tr>
+      <tr>
+        <td><code>SO</code></td>
+        <td>Text frame chứa số áo (có thể bỏ trống)</td>
       </tr>
       <tr>
         <td><code>SIZE</code></td>
@@ -216,8 +220,8 @@
     <tbody>
       <tr>
         <td><code>{size}</code></td>
-        <td><code>S</code>, <code>M</code>, <code>L</code>, <code>XL</code>, <code>2XL</code>, <code>3XL</code>,
-          <code>4XL</code>, <code>5XL</code>, <code>6XL</code>
+        <td><code>XS</code>, <code>S</code>, <code>M</code>, <code>L</code>, <code>XL</code>, <code>2XL</code>,
+          <code>3XL</code>, <code>4XL</code>, <code>5XL</code>, <code>6XL</code>
         </td>
       </tr>
       <tr>
@@ -269,6 +273,46 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
       <code>{size}_{vị_trí}</code> (ví dụ <code>L_SAU</code>).
     </p>
   </blockquote>
+
+  <hr>
+
+  <h2>File lệnh in (bước 2 — <code>nhap_ten_so.jsx</code>)</h2>
+
+  <p>Bước 2 đọc danh sách áo cần in từ một file <strong>CSV</strong> (xuất từ Excel:
+    <em>Save As → CSV</em>). Khi chạy <code>nhap_ten_so.jsx</code>, chọn file CSV này.</p>
+
+  <h3>Yêu cầu về bảng dữ liệu</h3>
+
+  <ul>
+    <li>Bảng phải có dòng tiêu đề chứa các cột sau (không phân biệt hoa/thường, có/không dấu):</li>
+  </ul>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tiêu đề cột</th>
+        <th>Bắt buộc?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>Size</code></td>
+        <td>Có</td>
+      </tr>
+      <tr>
+        <td><code>Số Áo</code></td>
+        <td>Không</td>
+      </tr>
+      <tr>
+        <td><code>Tên In Trên Áo</code></td>
+        <td>Không</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <ul>
+    <li>Ô <strong>Tên</strong> hoặc <strong>Số</strong> có thể để trống (không điền vô áo).</li>
+  </ul>
 
 </body>
 

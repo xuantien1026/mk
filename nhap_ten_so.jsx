@@ -1,11 +1,11 @@
 #target illustrator
 #include "lib/quy_uoc_ten.jsx"
-
-var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+#include "lib/cau_hinh.jsx"
 
 var PT_PER_MM = 2.83465;
 
 var CUSTOMER_NAME_MAX_WIDTH = {
+    'XS':  28.0 * 10 * PT_PER_MM,
     'S':   29.5 * 10 * PT_PER_MM,
     'M':   31.0 * 10 * PT_PER_MM,
     'L':   32.5 * 10 * PT_PER_MM,
@@ -32,51 +32,102 @@ function detectPreparedSizes() {
 }
 
 // -------------------------------------------------------
-// Dialog: collect customer names per size
+// Print command (CSV): pick the file and parse the order table
 // -------------------------------------------------------
-function getOrders(sizes) {
-    var dlg = new Window('dialog', 'Step 2: T-Shirt Orders');
-    dlg.orientation = 'column';
-    dlg.alignChildren = 'fill';
+function selectPrintCommandFile() {
+    return File.openDialog('Chọn file lệnh in (CSV)', 'CSV:*.csv,All files:*.*');
+}
 
-    var header = dlg.add('group');
-    header.orientation = 'row';
-    var h1 = header.add('statictext', undefined, 'Size');
-    h1.preferredSize = [45, 20];
-    var h2 = header.add('statictext', undefined, 'Customer Names (comma-separated)');
-    h2.preferredSize = [260, 20];
-
-    var inputs = {};
-    for (var i = 0; i < sizes.length; i++) {
-        var row = dlg.add('group');
-        row.orientation = 'row';
-        var lbl = row.add('statictext', undefined, sizes[i] + ':');
-        lbl.preferredSize = [45, 20];
-        var inp = row.add('edittext', undefined, '');
-        inp.preferredSize = [260, 20];
-        inputs[sizes[i]] = inp;
-    }
-
-    var btns = dlg.add('group');
-    btns.alignment = 'center';
-    btns.add('button', undefined, 'OK',     {name: 'ok'});
-    btns.add('button', undefined, 'Cancel', {name: 'cancel'});
-
-    if (dlg.show() !== 1) return null;
-
-    function trim(s) { return s.replace(/^\s+|\s+$/g, ''); }
-
-    var result = {};
-    for (var i = 0; i < sizes.length; i++) {
-        var parts = inputs[sizes[i]].text.split(',');
-        var names = [];
-        for (var j = 0; j < parts.length; j++) {
-            var n = trim(parts[j]);
-            if (n !== '') names.push(n);
+// Minimal RFC-4180 CSV parser: handles quoted fields, escaped "" quotes,
+// embedded commas/newlines, and \r\n or \n line endings.
+function parseCsv(text) {
+    var rows = [], row = [], field = '', inQuotes = false;
+    for (var i = 0; i < text.length; i++) {
+        var ch = text.charAt(i);
+        if (inQuotes) {
+            if (ch === '"') {
+                if (text.charAt(i + 1) === '"') { field += '"'; i++; }
+                else inQuotes = false;
+            } else field += ch;
+        } else if (ch === '"') {
+            inQuotes = true;
+        } else if (ch === ',') {
+            row.push(field); field = '';
+        } else if (ch === '\n') {
+            row.push(field); rows.push(row); row = []; field = '';
+        } else if (ch !== '\r') {
+            field += ch;
         }
-        result[sizes[i]] = names;
     }
-    return result;
+    row.push(field); rows.push(row);
+    return rows;
+}
+
+// Lowercase + strip Vietnamese diacritics so header matching is case/accent
+// insensitive (and the patterns below stay plain ASCII).
+function foldAscii(s) {
+    s = s.replace(/^\s+|\s+$/g, '').toLowerCase();
+    var groups = {
+        'a': 'àáạảãâầấậẩẫăằắặẳẵ',
+        'e': 'èéẹẻẽêềếệểễ',
+        'i': 'ìíịỉĩ',
+        'o': 'òóọỏõôồốộổỗơờớợởỡ',
+        'u': 'ùúụủũưừứựửữ',
+        'y': 'ỳýỵỷỹ',
+        'd': 'đ'
+    };
+    var out = '';
+    for (var i = 0; i < s.length; i++) {
+        var ch = s.charAt(i), rep = ch;
+        for (var base in groups) {
+            if (groups[base].indexOf(ch) !== -1) { rep = base; break; }
+        }
+        out += rep;
+    }
+    return out;
+}
+
+function trimCell(cells, idx) {
+    if (idx < 0 || idx >= cells.length) return '';
+    return cells[idx].replace(/^\s+|\s+$/g, '');
+}
+
+// Read the CSV, locate the header row by its Size / Số Áo / Tên In Trên Áo
+// columns, and return the order rows as [{ size, name, number }].
+function parsePrintCommand(file) {
+    file.encoding = 'UTF-8';
+    if (!file.open('r')) throw new Error('Khong mo duoc file: ' + file.fsName);
+    var text = file.read();
+    file.close();
+    if (text.length && text.charCodeAt(0) === 0xFEFF) text = text.substring(1); // strip BOM
+
+    var rows = parseCsv(text);
+
+    var HDR_SIZE = 'size', HDR_SO = 'so ao', HDR_TEN = 'ten in tren ao';
+    var headerRow = -1, sizeCol = -1, soCol = -1, tenCol = -1;
+    for (var r = 0; r < rows.length && headerRow === -1; r++) {
+        var sCol = -1, nCol = -1, tCol = -1;
+        for (var c = 0; c < rows[r].length; c++) {
+            var key = foldAscii(rows[r][c]);
+            if      (key === HDR_SIZE) sCol = c;
+            else if (key === HDR_SO)   nCol = c;
+            else if (key === HDR_TEN)  tCol = c;
+        }
+        if (sCol !== -1 && nCol !== -1) { headerRow = r; sizeCol = sCol; soCol = nCol; tenCol = tCol; }
+    }
+    if (headerRow === -1) throw new Error('Khong tim thay bang du lieu (thieu cot Size / So Ao) trong file CSV.');
+
+    var orders = [];
+    for (var r = headerRow + 1; r < rows.length; r++) {
+        var size = trimCell(rows[r], sizeCol).toUpperCase();
+        if (size === '') continue; // not an order row
+        orders.push({
+            size:   size,
+            number: trimCell(rows[r], soCol),
+            name:   tenCol !== -1 ? trimCell(rows[r], tenCol) : ''
+        });
+    }
+    return orders;
 }
 
 // -------------------------------------------------------
@@ -91,16 +142,39 @@ function requireItem(collection, name, fileName) {
     }
 }
 
-function findItemByName(container, name) {
+function findAllItemsByName(container, name, results) {
+    if (!results) results = [];
     for (var i = 0; i < container.pageItems.length; i++) {
         var item = container.pageItems[i];
-        if (item.name === name) return item;
-        if (item.typename === 'GroupItem') {
-            var found = findItemByName(item, name);
-            if (found) return found;
+        if (item.name === name) results.push(item);
+        if (item.typename === 'GroupItem') findAllItemsByName(item, name, results);
+    }
+    return results;
+}
+
+function contains(arr, value) {
+    for (var i = 0; i < arr.length; i++) if (arr[i] === value) return true;
+    return false;
+}
+
+// Fill every text frame named fieldName in container with value, or remove them
+// when value is empty. maxW (optional) caps the rendered width.
+function applyField(container, fieldName, value, maxW) {
+    var fields = findAllItemsByName(container, fieldName);
+    for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        if (f.typename !== 'TextFrame') continue;
+        if (value !== null && value !== '') {
+            f.contents = value;
+            if (maxW) {
+                var b = f.geometricBounds;
+                var w = b[2] - b[0];
+                if (w > maxW) f.resize((maxW / w) * 100, 100, true, true, true, true, false, Transformation.CENTER);
+            }
+        } else {
+            f.remove();
         }
     }
-    return null;
 }
 
 // -------------------------------------------------------
@@ -109,16 +183,28 @@ function findItemByName(container, name) {
 function main() {
     var preparedSizes = detectPreparedSizes();
     if (preparedSizes.length === 0) {
-        alert('No resized designs found. Run resize_to_sizes.jsx first.');
+        alert('Chua co thiet ke nao. Hay chay nhay_size.jsx truoc.');
         return;
     }
 
-    var orders = getOrders(preparedSizes);
-    if (!orders) return;
+    var file = selectPrintCommandFile();
+    if (!file) return; // cancelled
+
+    var rows = parsePrintCommand(file);
+    if (rows.length === 0) { alert('Khong tim thay dong du lieu nao trong file.'); return; }
+
+    // Group orders by size, ignoring any size that was not prepared in Step 1.
+    var orders = {};
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        if (!contains(preparedSizes, r.size)) continue;
+        if (!orders[r.size]) orders[r.size] = [];
+        orders[r.size].push(r);
+    }
 
     var totalQty = 0;
-    for (var s = 0; s < preparedSizes.length; s++) totalQty += orders[preparedSizes[s]].length;
-    if (totalQty === 0) { alert('No names entered. Nothing to do.'); return; }
+    for (var k in orders) totalQty += orders[k].length;
+    if (totalQty === 0) { alert('Khong co don hang nao khop size da chuan bi.'); return; }
 
     var mainDoc = app.activeDocument;
 
@@ -131,7 +217,7 @@ function main() {
     outputLayer.name = 'PRINT_OUTPUT';
 
     // Duplicate one of the Step 1 resized designs and apply the customer name
-    function duplicateDesign(sz, side, newInstanceName, customerName) {
+    function duplicateDesign(sz, side, newInstanceName, name, number) {
         var sourceFinal   = requireItem(mainDoc.pageItems, sz + '_' + side + '_FINAL',   mainDoc.name);
         var sourceOutline = requireItem(mainDoc.pageItems, sz + '_' + side + '_OUTLINE', mainDoc.name);
 
@@ -141,18 +227,9 @@ function main() {
         var newOutline  = sourceOutline.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         newOutline.name = newInstanceName + '_OUTLINE';
 
-        if (customerName !== null) {
-            var nameField = findItemByName(newGroup, TEN);
-            if (nameField && nameField.typename === 'TextFrame') {
-                nameField.contents = customerName;
-                var maxW      = CUSTOMER_NAME_MAX_WIDTH[sz];
-                var nameBounds = nameField.geometricBounds;
-                var nameWidth  = nameBounds[2] - nameBounds[0];
-                if (maxW && nameWidth > maxW) {
-                    nameField.resize((maxW / nameWidth) * 100, 100, true, true, true, true, false, Transformation.CENTER);
-                }
-            }
-        }
+        // Fill the name/number wherever those frames appear; remove them when blank.
+        applyField(newGroup, TEN, name,   CUSTOMER_NAME_MAX_WIDTH[sz]);
+        applyField(newGroup, SO,  number, null);
 
         return newGroup;
     }
@@ -176,16 +253,18 @@ function main() {
     var allGroups      = [];
 
     for (var s = 0; s < preparedSizes.length; s++) {
-        var sz    = preparedSizes[s];
-        var names = orders[sz];
-        if (names.length === 0) continue;
+        var sz   = preparedSizes[s];
+        var list = orders[sz];
+        if (!list) continue;
 
-        for (var q = 0; q < names.length; q++) {
+        for (var q = 0; q < list.length; q++) {
+            var name        = list[q].name;
+            var number      = list[q].number;
             var prefix      = sz + '_' + (q + 1);
-            var backGrp     = duplicateDesign(sz, 'BACK',         prefix + '_BACK',         names[q]);
-            var frontGrp    = duplicateDesign(sz, 'FRONT',        prefix + '_FRONT',        null);
-            var leftSlvGrp  = duplicateDesign(sz, 'LEFT_SLEEVE',  prefix + '_LEFT_SLEEVE',  null);
-            var rightSlvGrp = duplicateDesign(sz, 'RIGHT_SLEEVE', prefix + '_RIGHT_SLEEVE', null);
+            var backGrp     = duplicateDesign(sz, 'BACK',         prefix + '_BACK',         name, number);
+            var frontGrp    = duplicateDesign(sz, 'FRONT',        prefix + '_FRONT',        name, number);
+            var leftSlvGrp  = duplicateDesign(sz, 'LEFT_SLEEVE',  prefix + '_LEFT_SLEEVE',  name, number);
+            var rightSlvGrp = duplicateDesign(sz, 'RIGHT_SLEEVE', prefix + '_RIGHT_SLEEVE', name, number);
 
             var sleeveColHeight = leftSlvGrp.height + spacing + rightSlvGrp.height;
             var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
@@ -229,7 +308,7 @@ function main() {
         bg.name      = 'PRINT_BACKGROUND_' + (c + 1);
         bg.move(outputLayer, ElementPlacement.PLACEATEND);
     }
-    alert('Done! Created ' + totalQty + ' shirt(s) across ' + (allGroups.length / 4) + ' row(s).');
+    alert('Hoàn thành!');
 }
 
 try {

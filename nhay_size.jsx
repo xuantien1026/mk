@@ -1,7 +1,6 @@
 #target illustrator
 #include "lib/quy_uoc_ten.jsx"
-
-var SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+#include "lib/cau_hinh.jsx"
 
 var PT_PER_MM = 2.83465;
 
