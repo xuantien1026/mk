@@ -1,7 +1,7 @@
 #target illustrator
 
 var PT_PER_MM = 2.83465;
-var MIN_GAP   = 30 * PT_PER_MM; // 30mm minimum spacing between items and from edges
+var MIN_GAP   = 3 * PT_PER_MM; // 30mm minimum spacing between items and from edges
 
 // -------------------------------------------------------
 // Helpers
