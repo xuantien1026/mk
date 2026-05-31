@@ -38,6 +38,25 @@ function selectPrintCommandFile() {
     return File.openDialog('Chọn file lệnh in (CSV)', 'CSV:*.csv,All files:*.*');
 }
 
+// Ask for the printing-area width in metres. Returns the value, or null on cancel.
+function getPrintWidth() {
+    var dlg = new Window('dialog', 'Khổ in');
+    dlg.orientation = 'row';
+    dlg.alignChildren = 'center';
+    dlg.add('statictext', undefined, 'Chiều rộng khổ in (mét):');
+    var input = dlg.add('edittext', undefined, '1.6');
+    input.preferredSize = [60, 22];
+    input.active = true;
+    var btns = dlg.add('group');
+    btns.add('button', undefined, 'OK',     {name: 'ok'});
+    btns.add('button', undefined, 'Cancel', {name: 'cancel'});
+
+    if (dlg.show() !== 1) return null;
+    var v = parseFloat(input.text);
+    if (isNaN(v) || v <= 0) { alert('Chiều rộng không hợp lệ.'); return null; }
+    return v;
+}
+
 // Minimal RFC-4180 CSV parser: handles quoted fields, escaped "" quotes,
 // embedded commas/newlines, and \r\n or \n line endings.
 function parseCsv(text) {
@@ -187,6 +206,10 @@ function main() {
         return;
     }
 
+    var printWidth = getPrintWidth();
+    if (printWidth == null) return; // cancelled
+    var artboardWidth = printWidth * 1000 * PT_PER_MM;
+
     var file = selectPrintCommandFile();
     if (!file) return; // cancelled
 
@@ -248,9 +271,51 @@ function main() {
     var COLUMN_GAP     = 100;
     var currentTop     = bgTop;
     var columnLeft     = bgLeft;
-    var colMaxWidth    = 0;  // widest row in the current column (excludes padding)
-    var columns        = []; // {left, top, bottom, width} — one entry per strip
-    var allGroups      = [];
+
+    // Arrange the shirt parts: front | back, with the two sleeves stacked in a column
+    // to the right. Returns the content size and a placement callback.
+    function layoutShirt(frontGrp, backGrp, leftSlvGrp, rightSlvGrp) {
+        var sleeveColH = leftSlvGrp.height + spacing + rightSlvGrp.height;
+        var sleeveColW = Math.max(leftSlvGrp.width, rightSlvGrp.width);
+        return {
+            width:  frontGrp.width + spacing + backGrp.width + spacing + sleeveColW,
+            height: Math.max(frontGrp.height, backGrp.height, sleeveColH),
+            place: function (startX, top, contentH) {
+                var sleeveColX   = startX + frontGrp.width + spacing + backGrp.width + spacing;
+                var sleeveColTop = top - (contentH - sleeveColH) / 2;
+                moveWithOutline(frontGrp,    startX,                                            top - (contentH - frontGrp.height) / 2);
+                moveWithOutline(backGrp,     startX + frontGrp.width + spacing,                 top - (contentH - backGrp.height)  / 2);
+                moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColW - leftSlvGrp.width)  / 2, sleeveColTop);
+                moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColW - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
+            }
+        };
+    }
+
+    // Arrange the pant parts: left | right side by side.
+    function layoutPant(leftPantGrp, rightPantGrp) {
+        return {
+            width:  leftPantGrp.width + spacing + rightPantGrp.width,
+            height: Math.max(leftPantGrp.height, rightPantGrp.height),
+            place: function (startX, top, contentH) {
+                moveWithOutline(leftPantGrp,  startX,                               top - (contentH - leftPantGrp.height)  / 2);
+                moveWithOutline(rightPantGrp, startX + leftPantGrp.width + spacing, top - (contentH - rightPantGrp.height) / 2);
+            }
+        };
+    }
+
+    // Place one part-set on its own artboard of fixed width, stacking down the current
+    // column and breaking to a new column past MAX_COL_HEIGHT.
+    function emitArtboard(layout, artName) {
+        var artH = layout.height + padding * 2;
+        if (currentTop < bgTop && (bgTop - currentTop + artH) > MAX_COL_HEIGHT) {
+            columnLeft += artboardWidth + COLUMN_GAP;
+            currentTop  = bgTop;
+        }
+        var startX = columnLeft + (artboardWidth - layout.width) / 2;
+        layout.place(startX, currentTop - padding, layout.height);
+        mainDoc.artboards.add([columnLeft, currentTop, columnLeft + artboardWidth, currentTop - artH]).name = artName;
+        currentTop -= artH;
+    }
 
     for (var s = 0; s < preparedSizes.length; s++) {
         var sz   = preparedSizes[s];
@@ -258,56 +323,27 @@ function main() {
         if (!list) continue;
 
         for (var q = 0; q < list.length; q++) {
-            var name        = list[q].name;
-            var number      = list[q].number;
-            var prefix      = sz + '_' + (q + 1);
-            var backGrp     = duplicateDesign(sz, 'BACK',         prefix + '_BACK',         name, number);
-            var frontGrp    = duplicateDesign(sz, 'FRONT',        prefix + '_FRONT',        name, number);
-            var leftSlvGrp  = duplicateDesign(sz, 'LEFT_SLEEVE',  prefix + '_LEFT_SLEEVE',  name, number);
-            var rightSlvGrp = duplicateDesign(sz, 'RIGHT_SLEEVE', prefix + '_RIGHT_SLEEVE', name, number);
+            var name   = list[q].name;
+            var number = list[q].number;
+            var prefix = sz + '_' + (q + 1);
 
-            var sleeveColHeight = leftSlvGrp.height + spacing + rightSlvGrp.height;
-            var sleeveColWidth  = Math.max(leftSlvGrp.width, rightSlvGrp.width);
-            var rowHeight       = Math.max(frontGrp.height, backGrp.height, sleeveColHeight) + padding * 2;
+            var frontGrp     = duplicateDesign(sz, 'FRONT',        prefix + '_FRONT',        name, number);
+            var backGrp      = duplicateDesign(sz, 'BACK',         prefix + '_BACK',         name, number);
+            var leftSlvGrp   = duplicateDesign(sz, 'LEFT_SLEEVE',  prefix + '_LEFT_SLEEVE',  name, number);
+            var rightSlvGrp  = duplicateDesign(sz, 'RIGHT_SLEEVE', prefix + '_RIGHT_SLEEVE', name, number);
+            var leftPantGrp  = duplicateDesign(sz, 'LEFT_PANT',    prefix + '_LEFT_PANT',    name, number);
+            var rightPantGrp = duplicateDesign(sz, 'RIGHT_PANT',   prefix + '_RIGHT_PANT',   name, number);
 
-            // Start a new column when this row would exceed the 5m height limit
-            if (bgTop - currentTop + rowHeight > MAX_COL_HEIGHT && currentTop < bgTop) {
-                columns.push({left: columnLeft, top: bgTop, bottom: currentTop, width: colMaxWidth});
-                columnLeft  += colMaxWidth + padding * 2 + COLUMN_GAP;
-                currentTop   = bgTop;
-                colMaxWidth  = 0;
-            }
-
-            // No fixed sheet width: each row is as wide as front + back + sleeves need
-            var totalRowWidth   = frontGrp.width + spacing + backGrp.width + spacing + sleeveColWidth;
-            if (totalRowWidth > colMaxWidth) colMaxWidth = totalRowWidth;
-
-            var startX          = columnLeft + padding;
-            var sleeveColX      = startX + frontGrp.width + spacing + backGrp.width + spacing;
-            var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
-
-            moveWithOutline(frontGrp,    startX,                                                currentTop - (rowHeight - frontGrp.height) / 2);
-            moveWithOutline(backGrp,     startX + frontGrp.width + spacing,                     currentTop - (rowHeight - backGrp.height)  / 2);
-            moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - leftSlvGrp.width)  / 2, sleeveColTop);
-            moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rightSlvGrp.width) / 2, sleeveColTop - leftSlvGrp.height - spacing);
-
-            currentTop -= rowHeight;
-            allGroups.push(backGrp, frontGrp, leftSlvGrp, rightSlvGrp);
+            emitArtboard(layoutShirt(frontGrp, backGrp, leftSlvGrp, rightSlvGrp), prefix + '_SHIRT');
+            emitArtboard(layoutPant(leftPantGrp, rightPantGrp),                   prefix + '_PANT');
         }
     }
 
-    // One white background rectangle per column, sized to that column's widest row
-    columns.push({left: columnLeft, top: bgTop, bottom: currentTop, width: colMaxWidth});
-    for (var c = 0; c < columns.length; c++) {
-        var col = columns[c];
-        var bg = outputLayer.pathItems.rectangle(col.top, col.left, col.width + padding * 2, col.top - col.bottom);
-        var white = new CMYKColor();
-        white.cyan = 0; white.magenta = 0; white.yellow = 0; white.black = 0;
-        bg.fillColor = white;
-        bg.stroked   = false;
-        bg.name      = 'PRINT_BACKGROUND_' + (c + 1);
-        bg.move(outputLayer, ElementPlacement.PLACEATEND);
-    }
+    // Drop the giant Step-1 canvas artboard so only the product artboards remain, and
+    // hide the Step-1 masters so they don't bleed into the product artboards on export.
+    mainDoc.artboards.remove(0);
+    try { mainDoc.layers.getByName('SIZED_OUTPUT').visible = false; } catch (e) {}
+
     alert('Hoàn thành!');
 }
 

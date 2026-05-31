@@ -15,6 +15,7 @@ CancelledError.prototype = new Error();
 var BACK   = 'SAU';
 var FRONT  = 'TRUOC';
 var SLEEVE = 'TAY';
+var PANT   = 'QUAN';
 
 // SIZE label layout
 var SIZE_GLYPH_HEIGHT = 2 * PT_PER_MM;  // visible glyphs scaled to exactly 2mm tall
@@ -61,7 +62,7 @@ function recordVariant(name, variants) {
 // Open an outline file and collect the distinct style variants per position.
 function discoverVariants(file) {
     var variants = {};
-    variants[BACK] = []; variants[FRONT] = []; variants[SLEEVE] = [];
+    variants[BACK] = []; variants[FRONT] = []; variants[SLEEVE] = []; variants[PANT] = [];
     var doc = app.open(file);
     for (var i = 0; i < doc.pageItems.length; i++) {
         recordVariant(doc.pageItems[i].name, variants);
@@ -85,7 +86,7 @@ function selectOptions() {
         variantsByPath[files[f].fsName] = discoverVariants(files[f]);
     }
 
-    var TYPES = [BACK, FRONT, SLEEVE];
+    var TYPES = [BACK, FRONT, SLEEVE, PANT];
 
     var dlg = new Window('dialog', 'Step 1 — Resize Options');
     dlg.orientation = 'column';
@@ -284,7 +285,7 @@ function main() {
     var outputLayer = outDoc.layers[0];
     outputLayer.name = 'SIZED_OUTPUT';
 
-    var backShapes = {}, frontShapes = {}, sleeveShapes = {};
+    var backShapes = {}, frontShapes = {}, sleeveShapes = {}, pantShapes = {};
     for (var s = 0; s < options.sizes.length; s++) {
         var sz = options.sizes[s];
         function shapeName(sz, type, variant) {
@@ -296,6 +297,8 @@ function main() {
         frontShapes[sz].name  = sz + '_FRONT_SHAPE';
         sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, SLEEVE, options.variants[SLEEVE]), sourceDoc, outDoc);
         sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
+        pantShapes[sz]        = copyItemToDoc(shapeName(sz, PANT,   options.variants[PANT]),   sourceDoc, outDoc);
+        pantShapes[sz].name   = sz + '_PANT_SHAPE';
     }
 
     sourceDoc.close(SaveOptions.DONOTSAVECHANGES);
@@ -304,6 +307,8 @@ function main() {
     var backDesign = requireItem(mainDoc.pageItems, THAN_SAU,   mainDoc.name);
     var leftSleeve  = requireItem(mainDoc.pageItems, TAY_TRAI,   mainDoc.name);
     var rightSleeve = requireItem(mainDoc.pageItems, TAY_PHAI,   mainDoc.name);
+    var leftPant    = requireItem(mainDoc.pageItems, QUAN_TRAI,  mainDoc.name);
+    var rightPant   = requireItem(mainDoc.pageItems, QUAN_PHAI,  mainDoc.name);
 
     // side: 'FRONT' | 'BACK' | null (sleeve)
     function resizeAndMask(design, maskShape, instanceName, sizeName, side) {
@@ -396,27 +401,43 @@ function main() {
         var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, null);
         var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapes[sz], sz + '_RIGHT_SLEEVE', sz, null);
 
+        // The outline file holds only the LEFT pant shape — mirror it (negative X scale)
+        // for the right pant.
+        var pantShapeR = pantShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
+        pantShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
+        var leftPantGrp  = resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz, null);
+        var rightPantGrp = resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz, null);
+
         var frontVB = visBounds(frontGrp), backVB = visBounds(backGrp);
         var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
+        var lPntVB  = visBounds(leftPantGrp), rPntVB = visBounds(rightPantGrp);
 
         var sleeveColHeight = lSlvVB.height + spacing + rSlvVB.height;
         var sleeveColWidth  = Math.max(lSlvVB.width, rSlvVB.width);
-        var rowHeight       = Math.max(frontVB.height, backVB.height, sleeveColHeight) + padding * 2;
-        var totalRowWidth   = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth;
+        var pantColHeight   = lPntVB.height + spacing + rPntVB.height;
+        var pantColWidth    = Math.max(lPntVB.width, rPntVB.width);
+        var rowHeight       = Math.max(frontVB.height, backVB.height, sleeveColHeight, pantColHeight) + padding * 2;
+        var totalRowWidth   = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth + spacing + pantColWidth;
         var startX          = bgLeft + (bgWidth - totalRowWidth) / 2;
         var sleeveColX      = startX + frontVB.width + spacing + backVB.width + spacing;
         var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
+        var pantColX        = sleeveColX + sleeveColWidth + spacing;
+        var pantColTop      = currentTop - (rowHeight - pantColHeight) / 2;
 
         moveWithOutline(frontGrp,    startX,                                       currentTop - (rowHeight - frontVB.height) / 2);
         moveWithOutline(backGrp,     startX + frontVB.width + spacing,             currentTop - (rowHeight - backVB.height)  / 2);
         moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - lSlvVB.width) / 2, sleeveColTop);
         moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rSlvVB.width) / 2, sleeveColTop - lSlvVB.height - spacing);
+        moveWithOutline(leftPantGrp,  pantColX + (pantColWidth - lPntVB.width) / 2, pantColTop);
+        moveWithOutline(rightPantGrp, pantColX + (pantColWidth - rPntVB.width) / 2, pantColTop - lPntVB.height - spacing);
 
         currentTop -= rowHeight;
 
         backShapes[sz].remove();
         frontShapes[sz].remove();
         sleeveShapes[sz].remove();
+        pantShapes[sz].remove();
+        pantShapeR.remove();
     }
 
     app.activeDocument = outDoc;

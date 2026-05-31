@@ -186,6 +186,14 @@
         <td>Group thiết kế tay phải</td>
       </tr>
       <tr>
+        <td><code>QUAN_TRAI</code></td>
+        <td>Group thiết kế quần trái</td>
+      </tr>
+      <tr>
+        <td><code>QUAN_PHAI</code></td>
+        <td>Group thiết kế quần phải</td>
+      </tr>
+      <tr>
         <td><code>TEN</code></td>
         <td>Text frame chứa tên khách hàng (có thể bỏ trống)</td>
       </tr>
@@ -226,7 +234,8 @@
       </tr>
       <tr>
         <td><code>{vị_trí}</code></td>
-        <td><code>SAU</code> (mặt sau), <code>TRUOC</code> (mặt trước), <code>TAY</code> (tay áo)</td>
+        <td><code>SAU</code> (mặt sau), <code>TRUOC</code> (mặt trước), <code>TAY</code> (tay áo),
+          <code>QUAN</code> (quần)</td>
       </tr>
       <tr>
         <td><code>{tên_kiểu}</code></td>
@@ -272,14 +281,25 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
     <p><strong>Lưu ý:</strong> Vị trí không có kiểu (ví dụ chỉ có một kiểu mặt sau) thì đặt tên
       <code>{size}_{vị_trí}</code> (ví dụ <code>L_SAU</code>).
     </p>
+    <p><strong>Quần (<code>QUAN</code>):</strong> chỉ cần một hình cho quần <strong>trái</strong>.
+      Script tự động lật ngang để tạo quần phải.
+    </p>
   </blockquote>
 
   <hr>
 
   <h2>File lệnh in (bước 2 — <code>nhap_ten_so.jsx</code>)</h2>
 
-  <p>Bước 2 đọc danh sách áo cần in từ một file <strong>CSV</strong> (xuất từ Excel:
-    <em>Save As → CSV</em>). Khi chạy <code>nhap_ten_so.jsx</code>, chọn file CSV này.</p>
+  <p>Khi chạy <code>nhap_ten_so.jsx</code>:</p>
+
+  <ol>
+    <li>Nhập <strong>chiều rộng khổ in</strong> (mét, ví dụ <code>1.6</code>).</li>
+    <li>Chọn file <strong>lệnh in</strong> dạng <strong>CSV</strong> (xuất từ Excel: <em>Save As → CSV</em>).</li>
+  </ol>
+
+  <p>Với mỗi áo, script tạo <strong>2 artboard</strong> theo chiều rộng khổ in đã nhập: một artboard cho
+    <strong>áo</strong> (thân trước, thân sau, hai tay) và một artboard cho <strong>quần</strong> (trái, phải).
+    Các artboard được xếp chồng theo cột và tự xuống cột mới khi vượt quá 5 mét.</p>
 
   <h3>Yêu cầu về bảng dữ liệu</h3>
 
