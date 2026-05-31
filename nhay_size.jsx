@@ -23,27 +23,68 @@ var SIZE_BOTTOM_GAP   = 1 * PT_PER_MM;  // glyph bottom sits 1mm above the desig
 var SIZE_SIDE_INSET   = 20 * PT_PER_MM; // horizontal inset from the near mask edge
 
 // -------------------------------------------------------
-// Database: load shapes_db.json from the script's folder
-// Format: { "DisplayName": { "path": "...", "SAU": [...], "TRUOC": [...], "TAY": [...] } }
+// Outline files: discovered from the file_rap folder next to the script.
+// No config file — the available styles are parsed straight from each .ai's item
+// names, which follow the {size}_{position}_{style} convention (see HDSD.md).
 // -------------------------------------------------------
-function loadDatabase() {
-    var dbFile = new File($.fileName.replace(/[^\/\\]+$/, 'shapes_db.json'));
-    if (!dbFile.exists) throw new Error('shapes_db.json not found next to the script.');
-    dbFile.open('r');
-    var content = dbFile.read();
-    dbFile.close();
-    return eval('(' + content + ')');
+var OUTLINE_FOLDER = new File($.fileName).parent.fsName + '/file_rap';
+
+function contains(arr, value) {
+    for (var i = 0; i < arr.length; i++) if (arr[i] === value) return true;
+    return false;
+}
+
+// List every .ai file in the outline folder.
+function loadOutlineFiles() {
+    var folder = new Folder(OUTLINE_FOLDER);
+    if (!folder.exists) throw new Error('Khong tim thay thu muc: ' + folder.fsName);
+    var files = folder.getFiles(function (f) {
+        return (f instanceof File) && /\.ai$/i.test(f.name);
+    });
+    if (files.length === 0) throw new Error('Khong co file .ai nao trong thu muc: ' + folder.fsName);
+    files.sort();
+    return files;
+}
+
+// If an item name matches {size}_{position}_{style}, record its style under that position.
+function recordVariant(name, variants) {
+    if (!name) return;
+    var parts = name.split('_');
+    if (parts.length < 3) return;              // no style component (e.g. plain "L_SAU")
+    var size     = parts[0];
+    var position = parts[1];
+    var style    = parts.slice(2).join('_');   // style may itself contain underscores
+    if (!variants.hasOwnProperty(position)) return; // not a known position
+    if (!contains(SIZES, size)) return;             // not a known size
+    if (!contains(variants[position], style)) variants[position].push(style);
+}
+
+// Open an outline file and collect the distinct style variants per position.
+function discoverVariants(file) {
+    var variants = {};
+    variants[BACK] = []; variants[FRONT] = []; variants[SLEEVE] = [];
+    var doc = app.open(file);
+    for (var i = 0; i < doc.pageItems.length; i++) {
+        recordVariant(doc.pageItems[i].name, variants);
+    }
+    doc.close(SaveOptions.DONOTSAVECHANGES);
+    return variants;
 }
 
 // -------------------------------------------------------
 // Dialog: pick outline file, shape variants, and sizes — all in one
 // -------------------------------------------------------
 function selectOptions() {
-    var db = loadDatabase();
+    var files = loadOutlineFiles();
 
-    var fileNames = [];
-    for (var key in db) fileNames.push(key);
-    if (fileNames.length === 0) throw new Error('shapes_db.json contains no entries.');
+    // Pre-scan each file once so the dialog never has to open documents while it is
+    // modal. Display name = file name without the .ai extension.
+    var fileNames      = [];
+    var variantsByPath = {};
+    for (var f = 0; f < files.length; f++) {
+        fileNames.push(decodeURI(files[f].name).replace(/\.ai$/i, ''));
+        variantsByPath[files[f].fsName] = discoverVariants(files[f]);
+    }
 
     var TYPES = [BACK, FRONT, SLEEVE];
 
@@ -60,12 +101,17 @@ function selectOptions() {
     fileDropdown.preferredSize = [220, 20];
     fileDropdown.selection = 0;
 
+    function variantsForSelection() {
+        return variantsByPath[files[fileDropdown.selection.index].fsName];
+    }
+
     // Variant dropdowns (one per type)
     var variantRows      = {};
     var variantDropdowns = {};
+    var initialVariants  = variantsForSelection();
     for (var t = 0; t < TYPES.length; t++) {
         var type     = TYPES[t];
-        var variants = db[fileNames[0]][type] || [];
+        var variants = initialVariants[type] || [];
         var row      = dlg.add('group');
         row.orientation = 'row';
         var lbl = row.add('statictext', undefined, type + ':');
@@ -80,7 +126,7 @@ function selectOptions() {
 
     // Refresh variant dropdowns when the file selection changes
     function refreshVariants() {
-        var entry = db[fileDropdown.selection.text];
+        var entry = variantsForSelection();
         for (var t = 0; t < TYPES.length; t++) {
             var type     = TYPES[t];
             var variants = entry[type] || [];
@@ -114,18 +160,14 @@ function selectOptions() {
     }
     if (selectedSizes.length === 0) throw new Error('Chua chon size nao.');
 
-    var selectedEntry = db[fileDropdown.selection.text];
     var variants = {};
     for (var t = 0; t < TYPES.length; t++) {
         var sel = variantDropdowns[TYPES[t]].selection;
         variants[TYPES[t]] = sel ? sel.text : null;
     }
 
-    var file = new File(selectedEntry.path);
-    if (!file.exists) throw new Error('Khong tim thay file: ' + file.fsName);
-
     return {
-        file:     file,
+        file:     files[fileDropdown.selection.index],
         variants: variants,
         sizes:    selectedSizes
     };

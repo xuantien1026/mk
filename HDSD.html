@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hướng Dẫn Sử Dụng</title>
+  <style>
+    :root {
+      --accent: #2563eb;
+      --border: #d0d7de;
+      --bg-code: #f6f8fa;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      line-height: 1.65;
+      color: #1f2328;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    h1 {
+      font-size: 2em;
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: .3em;
+    }
+
+    h2 {
+      margin-top: 2em;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: .3em;
+    }
+
+    h3 {
+      margin-top: 1.5em;
+    }
+
+    code {
+      background: var(--bg-code);
+      padding: .15em .4em;
+      border-radius: 4px;
+      font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+      font-size: .9em;
+    }
+
+    pre {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      overflow-x: auto;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f0f4ff;
+    }
+
+    tr:nth-child(even) td {
+      background: #fafbfc;
+    }
+
+    blockquote {
+      margin: 1em 0;
+      padding: .6em 1em;
+      border-left: 4px solid #f59e0b;
+      background: #fffbeb;
+      border-radius: 0 6px 6px 0;
+    }
+
+    blockquote p {
+      margin: .3em 0;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2.5em 0;
+    }
+
+    ol,
+    ul {
+      padding-left: 1.5em;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Hướng Dẫn Sử Dụng</h1>
+
+  <h2>Quy trình</h2>
+
+  <p>Script được chia làm 3 bước:</p>
+
+  <ol>
+    <li><strong><code>nhay_size.jsx</code></strong> — Tạo bản thiết kế đã resize cho từng size. Sau đó người dùng có thể
+      điều chỉnh thủ công trước khi chuyển sang bước 2.</li>
+    <li><strong><code>nhap_ten_so.jsx</code></strong> — Nhập tên khách hàng &amp; số cho từng size, tạo bản in hoàn
+      chỉnh.</li>
+    <li><strong><code>xep_bo_cuc_in.jsx</code></strong> — Lựa chọn thiết kế để in &amp; nhập khổ in =&gt; máy tính tự
+      động sắp xếp thiết kế vào khổ in theo phương án tối ưu.</li>
+  </ol>
+
+  <hr>
+
+  <h2>Quy ước đặt tên trong file thiết kế ban đầu (size L)</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tên thiết kế</th>
+        <th>Mô tả</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>THAN_TRUOC</code></td>
+        <td>Group thiết kế mặt sau</td>
+      </tr>
+      <tr>
+        <td><code>THAN_SAU</code></td>
+        <td>Group thiết kế mặt trước</td>
+      </tr>
+      <tr>
+        <td><code>TAY_TRAI</code></td>
+        <td>Group thiết kế tay trái</td>
+      </tr>
+      <tr>
+        <td><code>TAY_PHAI</code></td>
+        <td>Group thiết kế tay phải</td>
+      </tr>
+      <tr>
+        <td><code>TEN</code></td>
+        <td>Text frame chứa tên khách hàng</td>
+      </tr>
+      <tr>
+        <td><code>SIZE</code></td>
+        <td>Text frame chứa size</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2>Quy ước đặt tên hình trong file .ai</h2>
+
+  <h3>Cú pháp</h3>
+
+  <pre><code>{size}_{vị_trí}_{tên_kiểu}</code></pre>
+
+  <h3>Các thành phần</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Thành phần</th>
+        <th>Giá trị hợp lệ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>{size}</code></td>
+        <td><code>S</code>, <code>M</code>, <code>L</code>, <code>XL</code>, <code>2XL</code>, <code>3XL</code>,
+          <code>4XL</code>, <code>5XL</code>, <code>6XL</code>
+        </td>
+      </tr>
+      <tr>
+        <td><code>{vị_trí}</code></td>
+        <td><code>SAU</code> (mặt sau), <code>TRUOC</code> (mặt trước), <code>TAY</code> (tay áo)</td>
+      </tr>
+      <tr>
+        <td><code>{tên_kiểu}</code></td>
+        <td>Tên tự do, ví dụ: <code>KIEU1</code>, <code>KIEU2</code>, <code>SLIM</code>, <code>REGULAR</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Ví dụ</h3>
+
+  <p>Nếu có 2 kiểu dáng mặt sau:</p>
+
+  <pre><code>S_SAU_KIEU1    M_SAU_KIEU1    L_SAU_KIEU1    ...
+S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
+
+  <p>Khi chạy script, người dùng chỉ cần chọn <code>KIEU1</code> hoặc <code>KIEU2</code> — script sẽ tự ghép với từng
+    size.</p>
+  <hr>
+
+  <h2>Thêm / cập nhật file rập</h2>
+
+  <p>Toàn bộ file rập nằm trong thư mục <strong><code>file_rap</code></strong>.</p>
+
+  <h3>Thêm một file rập mới</h3>
+
+  <ol>
+    <li>Lưu file <code>.ai</code> mới vào thư mục <code>file_rap</code>.</li>
+    <li>Đặt tên hình bên trong theo quy ước <code>{size}_{vị_trí}_{tên_kiểu}</code> ở trên.</li>
+  </ol>
+
+  <p>Xong — lần chạy <code>nhay_size.jsx</code> tiếp theo:</p>
+
+  <ul>
+    <li>File mới tự động xuất hiện trong danh sách chọn</li>
+    <li>Script tự động đọc nội dung file và trích xuất ra từng kiểu thiết kế để người dùng chọn</li>
+  </ul>
+
+  <h3>Thêm một kiểu mới cho file đã có</h3>
+
+  <p>Chỉ cần thêm hình và đặt tên <code>{size}_{vị_trí}_{tên_kiểu}</code> cho kiểu mới, script sẽ tự động biết.</p>
+
+  <blockquote>
+    <p><strong>Lưu ý:</strong> Vị trí không có kiểu (ví dụ chỉ có một kiểu mặt sau) thì đặt tên
+      <code>{size}_{vị_trí}</code> (ví dụ <code>L_SAU</code>).
+    </p>
+  </blockquote>
+
+</body>
+
+</html>
