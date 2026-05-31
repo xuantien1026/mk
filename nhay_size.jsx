@@ -318,7 +318,11 @@ function main() {
         // Extract SIZE labels before scaling so their own size is preserved
         var sizeLabels = (side !== null) ? extractSizeLabels(designCopy, sizeName, outputLayer) : [];
 
-        var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.clipped && designCopy.pageItems.length > 0)
+        // Convention: the first element of every design group is its bounding path
+        // (a normal path or a clip path) defining the intended fit extent. Measure that,
+        // not the whole group — so artwork that overflows the bounds (side bleed, stray
+        // elements) doesn't distort the scale.
+        var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.pageItems.length > 0)
             ? designCopy.pageItems[0]
             : designCopy;
 
