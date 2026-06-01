@@ -20,13 +20,21 @@ var CUSTOMER_NAME_MAX_WIDTH = {
 // -------------------------------------------------------
 // Detect which sizes were prepared in Step 1
 // -------------------------------------------------------
+// True if a page item with this name exists anywhere in the document.
+function itemExists(doc, name) {
+    try { doc.pageItems.getByName(name); return true; } catch (e) { return false; }
+}
+
+// A size counts as prepared if Step 1 produced its shirt parts and/or its pant parts.
+function hasShirtParts(doc, sz) { return itemExists(doc, sz + '_BACK_FINAL'); }
+function hasPantParts(doc, sz)  { return itemExists(doc, sz + '_LEFT_PANT_FINAL'); }
+
 function detectPreparedSizes() {
     var prepared = [];
     for (var i = 0; i < SIZES.length; i++) {
-        try {
-            app.activeDocument.pageItems.getByName(SIZES[i] + '_BACK_FINAL');
+        if (hasShirtParts(app.activeDocument, SIZES[i]) || hasPantParts(app.activeDocument, SIZES[i])) {
             prepared.push(SIZES[i]);
-        } catch (e) { /* not found */ }
+        }
     }
     return prepared;
 }
@@ -307,14 +315,19 @@ function main() {
         var sz   = preparedSizes[s];
         var list = orders[sz];
         if (!list) continue;
-        // Per size: pack all shirts first, then all pants.
-        for (var q = 0; q < list.length; q++) {
-            var ss = placeSlot(shirtArtH(sz));
-            placements.push({ page: ss.page, kind: 'SHIRT', sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ss.left, top: ss.top });
+        // Per size: pack all shirts first, then all pants — but only the parts that
+        // Step 1 actually produced for this design (shirt-only / pant-only / both).
+        if (hasShirtParts(sourceDoc, sz)) {
+            for (var q = 0; q < list.length; q++) {
+                var ss = placeSlot(shirtArtH(sz));
+                placements.push({ page: ss.page, kind: 'SHIRT', sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ss.left, top: ss.top });
+            }
         }
-        for (var q = 0; q < list.length; q++) {
-            var ps = placeSlot(pantArtH(sz));
-            placements.push({ page: ps.page, kind: 'PANT',  sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ps.left, top: ps.top });
+        if (hasPantParts(sourceDoc, sz)) {
+            for (var q = 0; q < list.length; q++) {
+                var ps = placeSlot(pantArtH(sz));
+                placements.push({ page: ps.page, kind: 'PANT',  sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ps.left, top: ps.top });
+            }
         }
     }
     var numPages = pgCount;
