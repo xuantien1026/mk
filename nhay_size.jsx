@@ -409,8 +409,12 @@ function main() {
 
         var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz, 'BACK');
         var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz, 'FRONT');
+        // The outline file holds only the LEFT sleeve shape — mirror it (negative X
+        // scale) for the right sleeve.
+        var sleeveShapeR = sleeveShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
+        sleeveShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
         var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, null);
-        var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapes[sz], sz + '_RIGHT_SLEEVE', sz, null);
+        var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz, null);
 
         // The outline file holds only the LEFT pant shape — mirror it (negative X scale)
         // for the right pant.
@@ -447,6 +451,7 @@ function main() {
         backShapes[sz].remove();
         frontShapes[sz].remove();
         sleeveShapes[sz].remove();
+        sleeveShapeR.remove();
         pantShapes[sz].remove();
         pantShapeR.remove();
     }
