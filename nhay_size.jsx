@@ -372,19 +372,19 @@ function main() {
         return clipGroup;
     }
 
-    // A clipped group's geometricBounds (and .width/.height) INCLUDE the artwork
-    // hidden by the mask — Illustrator does not clip the reported bounds. The clip
-    // path (pageItems[0]) defines the true visible extent, so read it for sizing.
+    // The true outer extent of a part is its cut OUTLINE, not the design: the outline
+    // is a stroked path whose stroke reaches a few mm beyond the clip/design edge.
+    // Measure the outline's visibleBounds (stroke included) so layout gaps sit between
+    // the actual cut lines. (A clipped group's own bounds can't be used — they include
+    // the artwork hidden by the mask. The outline coincides with the clip path.)
     function visBounds(group) {
-        var p = (group.typename === 'GroupItem' && group.clipped && group.pageItems.length > 0)
-            ? group.pageItems[0]
-            : group;
-        var b = p.geometricBounds; // [left, top, right, bottom]
+        var outline = outDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
+        var b = outline.visibleBounds; // [left, top, right, bottom], includes stroke
         return { left: b[0], top: b[1], width: b[2] - b[0], height: b[1] - b[3] };
     }
 
-    // Move a clip group so its VISIBLE top-left lands at (newX, newY); the matching
-    // _OUTLINE is shifted by the same delta.
+    // Move a part so its OUTLINE's visible top-left lands at (newX, newY); the clipped
+    // _FINAL design is shifted by the same delta so the two stay aligned.
     function moveWithOutline(group, newX, newY) {
         var vb = visBounds(group);
         var deltaX = newX - vb.left;
@@ -395,8 +395,8 @@ function main() {
     }
 
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
-    var padding    = 40;
-    var spacing    = 40;
+    var spacing    = 3 * PT_PER_MM;       // 3mm gap between adjacent designs
+    var padding    = spacing / 2;         // row margin: gap between rows/sizes = 2*padding = 3mm
     // Anchor the output to the top edge of the output artboard so the vertical stack
     // has maximum room before hitting Illustrator's pasteboard coordinate limit (the
     // point where geometry gets clamped, which corrupts the lower sizes).
