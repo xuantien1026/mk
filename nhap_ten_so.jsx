@@ -247,16 +247,19 @@ function main() {
 
     if (artboardWidth > CANVAS_W) { alert('Khổ in quá lớn — tối đa khoảng 5.7 mét.'); return; }
 
-    var padding    = 40;
+    var padding    = 0;     // no margin between the design and its artboard edges
     var COLUMN_GAP = 100;
 
-    // A clipped group's raw bounds include artwork hidden by the mask; the clip path
-    // (pageItems[0]) is the true visible extent. Measure that for layout/sizing.
+    // The _OUTLINE is the sibling of the _FINAL clip group inside their instance group.
+    function outlineOf(group) {
+        var ig = group.parent;
+        return (ig.pageItems[0] === group) ? ig.pageItems[1] : ig.pageItems[0];
+    }
+    // Measure a part by its cut OUTLINE's visibleBounds (stroke included) — the same as
+    // Step 1 — so sizing/placement sits between the actual cut lines, not the design,
+    // and the stroke isn't clipped by the artboard edge.
     function visBounds(group) {
-        var p = (group.typename === 'GroupItem' && group.clipped && group.pageItems.length > 0)
-            ? group.pageItems[0]
-            : group;
-        var b = p.geometricBounds; // [left, top, right, bottom]
+        var b = outlineOf(group).visibleBounds; // [left, top, right, bottom], includes stroke
         return { left: b[0], top: b[1], width: b[2] - b[0], height: b[1] - b[3] };
     }
     function vbByName(doc, name) {
