@@ -307,12 +307,14 @@ function main() {
         var sz   = preparedSizes[s];
         var list = orders[sz];
         if (!list) continue;
+        // Per size: pack all shirts first, then all pants.
         for (var q = 0; q < list.length; q++) {
-            var prefix = sz + '_' + (q + 1);
             var ss = placeSlot(shirtArtH(sz));
-            placements.push({ page: ss.page, kind: 'SHIRT', sz: sz, prefix: prefix, name: list[q].name, number: list[q].number, left: ss.left, top: ss.top });
+            placements.push({ page: ss.page, kind: 'SHIRT', sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ss.left, top: ss.top });
+        }
+        for (var q = 0; q < list.length; q++) {
             var ps = placeSlot(pantArtH(sz));
-            placements.push({ page: ps.page, kind: 'PANT',  sz: sz, prefix: prefix, name: list[q].name, number: list[q].number, left: ps.left, top: ps.top });
+            placements.push({ page: ps.page, kind: 'PANT',  sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ps.left, top: ps.top });
         }
     }
     var numPages = pgCount;
