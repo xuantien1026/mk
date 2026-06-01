@@ -214,16 +214,6 @@ function findItemByName(container, name) {
     return null;
 }
 
-function findAllItemsByName(container, name, results) {
-    if (!results) results = [];
-    for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        if (item.name === name) results.push(item);
-        if (item.typename === 'GroupItem') findAllItemsByName(item, name, results);
-    }
-    return results;
-}
-
 // TextFrame.geometricBounds extends to the font's descender line, not the actual
 // glyph ink. Outline a throwaway copy to measure the true extent of the visible
 // glyphs. Returns [left, top, right, bottom].
@@ -235,25 +225,127 @@ function glyphBounds(textFrame) {
     return b;
 }
 
-// Pull the SIZE text frames out of the design BEFORE it gets scaled (so their own
-// size is preserved), stamp them with the size label, and park them on parkLayer.
-function extractSizeLabels(designCopy, sizeName, parkLayer) {
-    var labels = [];
-    var items  = findAllItemsByName(designCopy, SIZE);
-    for (var i = 0; i < items.length; i++) {
-        if (items[i].typename === 'TextFrame') {
-            items[i].contents = sizeName;
-            items[i].move(parkLayer, ElementPlacement.PLACEATEND);
-            labels.push(items[i]);
-        }
-    }
-    return labels;
+// Build the SIZE label from scratch. We know its text, glyph height and placement, so
+// the design file no longer has to provide a SIZE text frame. Created on parkLayer;
+// placeSizeLabel then scales and positions it.
+function makeSizeLabel(sizeName, parkLayer) {
+    var label = parkLayer.textFrames.add();
+    label.contents = sizeName;
+    label.name = SIZE;
+    return label;
 }
 
-// Scale one SIZE label to SIZE_GLYPH_HEIGHT and place its glyph bottom SIZE_BOTTOM_GAP
-// above the design's bottom edge, inset SIZE_SIDE_INSET from the near side, then tuck
-// it back in front of the design.
-function placeSizeLabel(label, maskShape, side, designCopy) {
+// Gather every PathItem inside a mask shape (it may be a plain path, a compound path,
+// or a group of paths).
+function collectPaths(item, out) {
+    if (!out) out = [];
+    if (item.typename === 'PathItem') {
+        out.push(item);
+    } else if (item.typename === 'CompoundPathItem') {
+        for (var i = 0; i < item.pathItems.length; i++) out.push(item.pathItems[i]);
+    } else if (item.typename === 'GroupItem') {
+        for (var j = 0; j < item.pageItems.length; j++) collectPaths(item.pageItems[j], out);
+    }
+    return out;
+}
+
+// Cubic Bézier point at t for control points p0..p3 ([x, y]).
+function bezierPoint(p0, p1, p2, p3, t) {
+    var mt = 1 - t, a = mt * mt * mt, b = 3 * mt * mt * t, c = 3 * mt * t * t, d = t * t * t;
+    return [a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+            a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]];
+}
+
+// Flatten a path into straight [ [x,y],[x,y] ] segments (Béziers sampled in `steps`).
+function flattenSegments(pathItem, steps, segs) {
+    var pp = pathItem.pathPoints, n = pp.length;
+    if (n < 2) return segs;
+    var count = pathItem.closed ? n : n - 1;
+    for (var i = 0; i < count; i++) {
+        var a = pp[i], b = pp[(i + 1) % n];
+        var p0 = a.anchor, p1 = a.rightDirection, p2 = b.leftDirection, p3 = b.anchor, prev = p0;
+        for (var s = 1; s <= steps; s++) {
+            var cur = bezierPoint(p0, p1, p2, p3, s / steps);
+            segs.push([prev, cur]);
+            prev = cur;
+        }
+    }
+    return segs;
+}
+
+// Leftmost/rightmost x where the (flattened) shape crosses the horizontal line y = Y,
+// i.e. the shape's true horizontal extent at that height. Null if it doesn't reach Y.
+function spanAtY(segs, Y) {
+    var min = null, max = null;
+    for (var i = 0; i < segs.length; i++) {
+        var a = segs[i][0], b = segs[i][1], ya = a[1], yb = b[1];
+        if ((ya <= Y && Y < yb) || (yb <= Y && Y < ya)) {
+            var x = a[0] + (b[0] - a[0]) * (Y - ya) / (yb - ya);
+            if (min === null || x < min) min = x;
+            if (max === null || x > max) max = x;
+        }
+    }
+    return (min === null) ? null : { left: min, right: max };
+}
+
+// b = [left, top, right, bottom] (top > bottom); is point [x, y] inside it?
+function boundsContain(b, pt) {
+    return pt[0] >= b[0] && pt[0] <= b[2] && pt[1] <= b[1] && pt[1] >= b[3];
+}
+
+// Frontmost filled path under a point — walk the design front-to-back (pageItems[0] is
+// on top) and return the first filled path/compound whose bounds contain the point.
+// Containment is by bounding box, so overlaps aren't resolved exactly. Null if none.
+function fillColorAtPoint(item, pt) {
+    if (item.typename === 'GroupItem') {
+        for (var i = 0; i < item.pageItems.length; i++) {
+            var c = fillColorAtPoint(item.pageItems[i], pt);
+            if (c) return c;
+        }
+        return null;
+    }
+    if (item.typename === 'CompoundPathItem') {
+        if (boundsContain(item.geometricBounds, pt) && item.pathItems.length && item.pathItems[0].filled) {
+            return item.pathItems[0].fillColor;
+        }
+        return null;
+    }
+    if (item.typename === 'PathItem') {
+        if (item.filled && boundsContain(item.geometricBounds, pt)) return item.fillColor;
+        return null;
+    }
+    return null;
+}
+
+// Perceived luminance 0..1 of a solid color, or null when it can't be judged
+// (gradient / pattern / no fill) — caller then defaults to a dark label.
+function colorLuminance(color) {
+    var tn = color.typename, r, g, b;
+    if (tn === 'RGBColor')  { return (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255; }
+    if (tn === 'GrayColor') { return 1 - (color.gray / 100); } // gray is a 0..100 tint, 100 = black
+    if (tn === 'CMYKColor') {
+        var k = color.black / 100;
+        r = 255 * (1 - color.cyan / 100)    * (1 - k);
+        g = 255 * (1 - color.magenta / 100) * (1 - k);
+        b = 255 * (1 - color.yellow / 100)  * (1 - k);
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    }
+    if (tn === 'SpotColor') { try { return colorLuminance(color.spot.color); } catch (e) { return null; } }
+    return null;
+}
+
+// Black or white in the document's color space.
+function blackOrWhite(doc, white) {
+    if (doc.documentColorSpace === DocumentColorSpace.RGB) {
+        var c = new RGBColor(); c.red = c.green = c.blue = white ? 255 : 0; return c;
+    }
+    var k = new CMYKColor(); k.cyan = 0; k.magenta = 0; k.yellow = 0; k.black = white ? 0 : 100; return k;
+}
+
+// Scale the SIZE label to SIZE_GLYPH_HEIGHT and place its glyph bottom SIZE_BOTTOM_GAP
+// above the design's bottom edge, inset SIZE_SIDE_INSET from the near side (nearSide is
+// 'RIGHT' or 'LEFT'), then tuck it in front of the design.
+function placeSizeLabel(label, maskShape, nearSide, designCopy, doc) {
     var gb     = glyphBounds(label);
     var glyphH = gb[1] - gb[3];
     if (glyphH > 0) {
@@ -264,10 +356,28 @@ function placeSizeLabel(label, maskShape, side, designCopy) {
     var maskBottom = maskShape.position[1] - maskShape.height;
     var bounds     = label.geometricBounds;
     var newY = label.position[1] + (maskBottom + SIZE_BOTTOM_GAP - glyphBounds(label)[3]);
-    var newX = (side === 'FRONT')
-        ? label.position[0] + (maskShape.position[0] + maskShape.width - SIZE_SIDE_INSET - bounds[2])
-        : label.position[0] + (maskShape.position[0] + SIZE_SIDE_INSET - bounds[0]);
+
+    // The bottom of a piece (a sleeve especially) can be narrower than its bounding box,
+    // so inset from the shape's ACTUAL edge at the label's height, not the box edge.
+    var segs = [], paths = collectPaths(maskShape);
+    for (var i = 0; i < paths.length; i++) flattenSegments(paths[i], 24, segs);
+    var span      = spanAtY(segs, maskBottom + SIZE_BOTTOM_GAP + SIZE_GLYPH_HEIGHT / 2);
+    var edgeLeft  = span ? span.left  : maskShape.position[0];
+    var edgeRight = span ? span.right : maskShape.position[0] + maskShape.width;
+
+    var newX = (nearSide === 'RIGHT')
+        ? label.position[0] + (edgeRight - SIZE_SIDE_INSET - bounds[2])
+        : label.position[0] + (edgeLeft  + SIZE_SIDE_INSET - bounds[0]);
     label.position = [newX, newY];
+
+    // Contrasting fill so the label reads over the design: sample the frontmost solid
+    // fill under the label centre (the label isn't in the design yet, so it can't match
+    // itself); dark background -> white text, light/unknown -> black text.
+    var lb     = label.geometricBounds;
+    var under  = fillColorAtPoint(designCopy, [(lb[0] + lb[2]) / 2, (lb[1] + lb[3]) / 2]);
+    var lum    = under ? colorLuminance(under) : null;
+    label.textRange.characterAttributes.fillColor = blackOrWhite(doc, lum !== null && lum < 0.5);
+
     label.move(designCopy, ElementPlacement.PLACEBEFORE);
 }
 
@@ -334,13 +444,10 @@ function main() {
         rightPant   = requireItem(mainDoc.pageItems, QUAN_PHAI,  mainDoc.name);
     }
 
-    // side: 'FRONT' | 'BACK' | null (sleeve)
-    function resizeAndMask(design, maskShape, instanceName, sizeName, side) {
+    // nearSide: 'RIGHT' | 'LEFT' — which edge the SIZE label is inset from.
+    function resizeAndMask(design, maskShape, instanceName, sizeName, nearSide) {
         var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         designCopy.name = instanceName + '_DESIGN';
-
-        // Extract SIZE labels before scaling so their own size is preserved
-        var sizeLabels = (side !== null) ? extractSizeLabels(designCopy, sizeName, outputLayer) : [];
 
         // Convention: the last element of every design group is its bounding path
         // (a normal path or a clip path) defining the intended fit extent. Measure that,
@@ -377,10 +484,8 @@ function main() {
         clipPath.move(clipGroup, ElementPlacement.PLACEATBEGINNING);
         clipGroup.clipped = true;
 
-        // Scale and position the SIZE labels relative to the masked design
-        for (var i = 0; i < sizeLabels.length; i++) {
-            placeSizeLabel(sizeLabels[i], maskShape, side, designCopy);
-        }
+        // Create the SIZE label and place it relative to the masked design.
+        placeSizeLabel(makeSizeLabel(sizeName, outputLayer), maskShape, nearSide, designCopy, outDoc);
 
         var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         outlineShape.name = instanceName + '_OUTLINE';
@@ -432,14 +537,14 @@ function main() {
         var sz = options.sizes[s];
 
         if (hasShirt) {
-            var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz, 'BACK');
-            var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz, 'FRONT');
+            var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz, 'LEFT');
+            var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz, 'RIGHT');
             // The outline file holds only the LEFT sleeve shape — mirror it (negative X
             // scale) for the right sleeve.
             var sleeveShapeR = sleeveShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
             sleeveShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
-            var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, null);
-            var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz, null);
+            var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, 'LEFT');
+            var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz, 'RIGHT');
 
             var frontVB = visBounds(frontGrp), backVB = visBounds(backGrp);
             var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
@@ -471,8 +576,8 @@ function main() {
             // for the right pant.
             var pantShapeR = pantShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
             pantShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
-            var leftPantGrp  = resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz, null);
-            var rightPantGrp = resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz, null);
+            var leftPantGrp  = resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz, 'LEFT');
+            var rightPantGrp = resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz, 'RIGHT');
 
             var lPntVB  = visBounds(leftPantGrp), rPntVB = visBounds(rightPantGrp);
 
