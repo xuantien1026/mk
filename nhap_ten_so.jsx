@@ -240,7 +240,6 @@ function main() {
     if (artboardWidth > CANVAS_W) { alert('Khổ in quá lớn — tối đa khoảng 5.7 mét.'); return; }
 
     var padding    = 40;
-    var spacing    = 40;
     var COLUMN_GAP = 100;
 
     // A clipped group's raw bounds include artwork hidden by the mask; the clip path
@@ -255,19 +254,38 @@ function main() {
     function vbByName(doc, name) {
         return visBounds(requireItem(doc.pageItems, name, doc.name));
     }
+    // Union of several { left, top, width, height } boxes into one bounding box.
+    function unionBounds(boxes) {
+        var left = Infinity, top = -Infinity, right = -Infinity, bottom = Infinity;
+        for (var i = 0; i < boxes.length; i++) {
+            var b = boxes[i];
+            if (b.left < left) left = b.left;
+            if (b.top > top) top = b.top;
+            if (b.left + b.width > right) right = b.left + b.width;
+            if (b.top - b.height < bottom) bottom = b.top - b.height;
+        }
+        return { left: left, top: top, width: right - left, height: top - bottom };
+    }
 
     // -------------------------------------------------------
     // Phase 1: assign every artboard to a page + slot, using the master sizes (no
     // duplication needed — a duplicate is identical to its master).
     // -------------------------------------------------------
+    // Block height = the parts' own Step-1 extent (union), so the artboard wraps the
+    // layout as Step 1 produced it. Width comes from the user's print-width input.
     function shirtArtH(sz) {
-        var f  = vbByName(sourceDoc, sz + '_FRONT_FINAL'),  b  = vbByName(sourceDoc, sz + '_BACK_FINAL');
-        var ls = vbByName(sourceDoc, sz + '_LEFT_SLEEVE_FINAL'), rs = vbByName(sourceDoc, sz + '_RIGHT_SLEEVE_FINAL');
-        return Math.max(f.height, b.height, ls.height + spacing + rs.height) + padding * 2;
+        return unionBounds([
+            vbByName(sourceDoc, sz + '_FRONT_FINAL'),
+            vbByName(sourceDoc, sz + '_BACK_FINAL'),
+            vbByName(sourceDoc, sz + '_LEFT_SLEEVE_FINAL'),
+            vbByName(sourceDoc, sz + '_RIGHT_SLEEVE_FINAL')
+        ]).height + padding * 2;
     }
     function pantArtH(sz) {
-        var l = vbByName(sourceDoc, sz + '_LEFT_PANT_FINAL'), r = vbByName(sourceDoc, sz + '_RIGHT_PANT_FINAL');
-        return Math.max(l.height, r.height) + padding * 2;
+        return unionBounds([
+            vbByName(sourceDoc, sz + '_LEFT_PANT_FINAL'),
+            vbByName(sourceDoc, sz + '_RIGHT_PANT_FINAL')
+        ]).height + padding * 2;
     }
 
     var placements = []; // { page, kind, sz, prefix, name, number, left, top }
@@ -331,52 +349,39 @@ function main() {
 
             return g;
         }
-        function moveWithOutline(group, newX, newY) {
-            var vb = visBounds(group);
-            var dx = newX - vb.left, dy = newY - vb.top;
-            group.position = [group.position[0] + dx, group.position[1] + dy];
-            var outline = doc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
-            outline.position = [outline.position[0] + dx, outline.position[1] + dy];
+        // The parts keep their Step-1 relative layout. Translate the whole block as a
+        // unit into the slot (horizontally centered in the artboard, padded from the
+        // top), then frame it with an artboard of print-width × the block's own height.
+        function placeBlock(parts, p, suffix) {
+            var boxes = [];
+            for (var i = 0; i < parts.length; i++) boxes.push(visBounds(parts[i]));
+            var bb = unionBounds(boxes);
+
+            var dx = (p.left + (artboardWidth - bb.width) / 2) - bb.left;
+            var dy = (p.top - padding) - bb.top;
+            // Each part is the _FINAL clip group; its parent is the _OUTLINE+_FINAL
+            // instance group. Moving the parent translates outline and design together.
+            for (var j = 0; j < parts.length; j++) {
+                var ig = parts[j].parent;
+                ig.position = [ig.position[0] + dx, ig.position[1] + dy];
+            }
+
+            doc.artboards.add([p.left, p.top, p.left + artboardWidth, p.top - (bb.height + padding * 2)]).name = p.prefix + suffix;
         }
 
         function buildShirt(p) {
-            var f  = vbByName(doc, p.sz + '_FRONT_FINAL'),  b  = vbByName(doc, p.sz + '_BACK_FINAL');
-            var ls = vbByName(doc, p.sz + '_LEFT_SLEEVE_FINAL'), rs = vbByName(doc, p.sz + '_RIGHT_SLEEVE_FINAL');
-            var sleeveColH = ls.height + spacing + rs.height;
-            var sleeveColW = Math.max(ls.width, rs.width);
-            var contentW = f.width + spacing + b.width + spacing + sleeveColW;
-            var contentH = Math.max(f.height, b.height, sleeveColH);
-
-            var fG  = dupPart(p.sz, 'FRONT',        p.prefix + '_FRONT',        p.name, p.number);
-            var bG  = dupPart(p.sz, 'BACK',         p.prefix + '_BACK',         p.name, p.number);
-            var lsG = dupPart(p.sz, 'LEFT_SLEEVE',  p.prefix + '_LEFT_SLEEVE',  p.name, p.number);
-            var rsG = dupPart(p.sz, 'RIGHT_SLEEVE', p.prefix + '_RIGHT_SLEEVE', p.name, p.number);
-
-            var startX = p.left + (artboardWidth - contentW) / 2;
-            var top    = p.top - padding;
-            var sleeveColX   = startX + f.width + spacing + b.width + spacing;
-            var sleeveColTop = top - (contentH - sleeveColH) / 2;
-            moveWithOutline(fG,  startX,                                 top - (contentH - f.height) / 2);
-            moveWithOutline(bG,  startX + f.width + spacing,             top - (contentH - b.height) / 2);
-            moveWithOutline(lsG, sleeveColX + (sleeveColW - ls.width)/2, sleeveColTop);
-            moveWithOutline(rsG, sleeveColX + (sleeveColW - rs.width)/2, sleeveColTop - ls.height - spacing);
-
-            doc.artboards.add([p.left, p.top, p.left + artboardWidth, p.top - (contentH + padding * 2)]).name = p.prefix + '_SHIRT';
+            placeBlock([
+                dupPart(p.sz, 'FRONT',        p.prefix + '_FRONT',        p.name, p.number),
+                dupPart(p.sz, 'BACK',         p.prefix + '_BACK',         p.name, p.number),
+                dupPart(p.sz, 'LEFT_SLEEVE',  p.prefix + '_LEFT_SLEEVE',  p.name, p.number),
+                dupPart(p.sz, 'RIGHT_SLEEVE', p.prefix + '_RIGHT_SLEEVE', p.name, p.number)
+            ], p, '_SHIRT');
         }
         function buildPant(p) {
-            var l = vbByName(doc, p.sz + '_LEFT_PANT_FINAL'), r = vbByName(doc, p.sz + '_RIGHT_PANT_FINAL');
-            var contentW = l.width + spacing + r.width;
-            var contentH = Math.max(l.height, r.height);
-
-            var lG = dupPart(p.sz, 'LEFT_PANT',  p.prefix + '_LEFT_PANT',  p.name, p.number);
-            var rG = dupPart(p.sz, 'RIGHT_PANT', p.prefix + '_RIGHT_PANT', p.name, p.number);
-
-            var startX = p.left + (artboardWidth - contentW) / 2;
-            var top    = p.top - padding;
-            moveWithOutline(lG, startX,                     top - (contentH - l.height) / 2);
-            moveWithOutline(rG, startX + l.width + spacing, top - (contentH - r.height) / 2);
-
-            doc.artboards.add([p.left, p.top, p.left + artboardWidth, p.top - (contentH + padding * 2)]).name = p.prefix + '_PANT';
+            placeBlock([
+                dupPart(p.sz, 'LEFT_PANT',  p.prefix + '_LEFT_PANT',  p.name, p.number),
+                dupPart(p.sz, 'RIGHT_PANT', p.prefix + '_RIGHT_PANT', p.name, p.number)
+            ], p, '_PANT');
         }
 
         for (var i = 0; i < placements.length; i++) {
