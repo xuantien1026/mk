@@ -360,7 +360,14 @@ function main() {
 
         var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         outlineShape.name = instanceName + '_OUTLINE';
-        outlineShape.move(clipGroup, ElementPlacement.PLACEBEFORE);
+
+        // Keep each part-instance's _OUTLINE and _FINAL together as a single group in
+        // the SIZED_OUTPUT layer, so they read as one unit and can be selected/moved
+        // together. Outline stays on top (PLACEATBEGINNING), final below.
+        var instanceGroup = outputLayer.groupItems.add();
+        instanceGroup.name = instanceName;
+        outlineShape.move(instanceGroup, ElementPlacement.PLACEATBEGINNING);
+        clipGroup.move(instanceGroup, ElementPlacement.PLACEATEND);
 
         return clipGroup;
     }
