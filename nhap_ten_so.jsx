@@ -320,6 +320,15 @@ function main() {
             var o = so.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
             applyField(g, TEN, name,   CUSTOMER_NAME_MAX_WIDTH[sz]);
             applyField(g, SO,  number, null);
+
+            // Keep each part-instance's _OUTLINE and _FINAL together as a single group,
+            // the same way Step 1 does, so they read as one unit in the print output.
+            // Outline stays on top (PLACEATBEGINNING), final below.
+            var instanceGroup = outLayer.groupItems.add();
+            instanceGroup.name = instanceName;
+            o.move(instanceGroup, ElementPlacement.PLACEATBEGINNING);
+            g.move(instanceGroup, ElementPlacement.PLACEATEND);
+
             return g;
         }
         function moveWithOutline(group, newX, newY) {
