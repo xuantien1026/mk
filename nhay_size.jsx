@@ -427,26 +427,31 @@ function main() {
         var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
         var lPntVB  = visBounds(leftPantGrp), rPntVB = visBounds(rightPantGrp);
 
+        // Row 1: front, back, and the sleeve column (left sleeve stacked over right).
         var sleeveColHeight = lSlvVB.height + spacing + rSlvVB.height;
         var sleeveColWidth  = Math.max(lSlvVB.width, rSlvVB.width);
-        var pantColHeight   = lPntVB.height + spacing + rPntVB.height;
-        var pantColWidth    = Math.max(lPntVB.width, rPntVB.width);
-        var rowHeight       = Math.max(frontVB.height, backVB.height, sleeveColHeight, pantColHeight) + padding * 2;
-        var totalRowWidth   = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth + spacing + pantColWidth;
-        var startX          = bgLeft + (bgWidth - totalRowWidth) / 2;
-        var sleeveColX      = startX + frontVB.width + spacing + backVB.width + spacing;
-        var sleeveColTop    = currentTop - (rowHeight - sleeveColHeight) / 2;
-        var pantColX        = sleeveColX + sleeveColWidth + spacing;
-        var pantColTop      = currentTop - (rowHeight - pantColHeight) / 2;
+        var row1Height      = Math.max(frontVB.height, backVB.height, sleeveColHeight) + padding * 2;
+        var row1Width       = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth;
+        var row1StartX      = bgLeft + (bgWidth - row1Width) / 2;
+        var sleeveColX      = row1StartX + frontVB.width + spacing + backVB.width + spacing;
+        var sleeveColTop    = currentTop - (row1Height - sleeveColHeight) / 2;
 
-        moveWithOutline(frontGrp,    startX,                                       currentTop - (rowHeight - frontVB.height) / 2);
-        moveWithOutline(backGrp,     startX + frontVB.width + spacing,             currentTop - (rowHeight - backVB.height)  / 2);
+        moveWithOutline(frontGrp,    row1StartX,                                       currentTop - (row1Height - frontVB.height) / 2);
+        moveWithOutline(backGrp,     row1StartX + frontVB.width + spacing,             currentTop - (row1Height - backVB.height)  / 2);
         moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - lSlvVB.width) / 2, sleeveColTop);
         moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rSlvVB.width) / 2, sleeveColTop - lSlvVB.height - spacing);
-        moveWithOutline(leftPantGrp,  pantColX + (pantColWidth - lPntVB.width) / 2, pantColTop);
-        moveWithOutline(rightPantGrp, pantColX + (pantColWidth - rPntVB.width) / 2, pantColTop - lPntVB.height - spacing);
 
-        currentTop -= rowHeight;
+        currentTop -= row1Height;
+
+        // Row 2: left and right pant side by side.
+        var row2Height = Math.max(lPntVB.height, rPntVB.height) + padding * 2;
+        var row2Width  = lPntVB.width + spacing + rPntVB.width;
+        var row2StartX = bgLeft + (bgWidth - row2Width) / 2;
+
+        moveWithOutline(leftPantGrp,  row2StartX,                          currentTop - (row2Height - lPntVB.height) / 2);
+        moveWithOutline(rightPantGrp, row2StartX + lPntVB.width + spacing, currentTop - (row2Height - rPntVB.height) / 2);
+
+        currentTop -= row2Height;
 
         backShapes[sz].remove();
         frontShapes[sz].remove();
