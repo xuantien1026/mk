@@ -412,10 +412,13 @@ function placeSizeLabel(label, maskShape, nearSide, designCopy, doc) {
 // Main
 // -------------------------------------------------------
 function main() {
-    var options = selectOptions();
-
-    var mainDoc   = app.activeDocument;
+    // Validate the design file before anything else — fail fast, before the user
+    // spends time in the options dialog. (selectOptions opens/closes outline files,
+    // so capture the active design document first.)
+    var mainDoc = app.activeDocument;
     validateUniqueParts(mainDoc);
+
+    var options   = selectOptions();
     var sourceDoc = app.open(options.file);
 
     // Output goes to a brand-new document, not a layer in the design file.
