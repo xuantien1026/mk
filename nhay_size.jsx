@@ -444,7 +444,7 @@ function main() {
     var has2Pant = !has4Pant && hasItem(mainDoc.pageItems, QUAN_TRAI) && hasItem(mainDoc.pageItems, QUAN_PHAI);
     var hasPant  = has4Pant || has2Pant;
     if (!hasShirt && !hasPant) {
-        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC/THAN_SAU/TAY_TRAI/TAY_PHAI) lẫn nhóm quần (QUAN_TRAI/QUAN_PHAI hoặc QUAN_TRAI1/QUAN_TRAI2/QUAN_PHAI1/QUAN_PHAI2).');
+        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC + THAN_SAU + TAY_TRAI + TAY_PHAI) lẫn nhóm quần (QUAN_TRAI + QUAN_PHAI hoặc QUAN_TRAI1 + QUAN_TRAI2 + QUAN_PHAI1 + QUAN_PHAI2).');
     }
 
     var backShapes = {}, frontShapes = {}, sleeveShapes = {};
