@@ -26,9 +26,19 @@ function itemExists(doc, name) {
     try { doc.pageItems.getByName(name); return true; } catch (e) { return false; }
 }
 
+// The pant part "sides" Step 1 produced for a size — the 4-shape split (two pieces per
+// leg) or the original 2-shape pant. Empty when the size has no pant parts.
+function pantSides(doc, sz) {
+    if (itemExists(doc, sz + '_LEFT_PANT_1_FINAL'))
+        return ['LEFT_PANT_1', 'LEFT_PANT_2', 'RIGHT_PANT_1', 'RIGHT_PANT_2'];
+    if (itemExists(doc, sz + '_LEFT_PANT_FINAL'))
+        return ['LEFT_PANT', 'RIGHT_PANT'];
+    return [];
+}
+
 // A size counts as prepared if Step 1 produced its shirt parts and/or its pant parts.
 function hasShirtParts(doc, sz) { return itemExists(doc, sz + '_BACK_FINAL'); }
-function hasPantParts(doc, sz)  { return itemExists(doc, sz + '_LEFT_PANT_FINAL'); }
+function hasPantParts(doc, sz)  { return pantSides(doc, sz).length > 0; }
 
 function detectPreparedSizes() {
     var prepared = [];
@@ -284,10 +294,9 @@ function main() {
         ]).height + padding * 2;
     }
     function pantArtH(sz) {
-        return unionBounds([
-            vbByName(sourceDoc, sz + '_LEFT_PANT_FINAL'),
-            vbByName(sourceDoc, sz + '_RIGHT_PANT_FINAL')
-        ]).height + padding * 2;
+        var sides = pantSides(sourceDoc, sz), boxes = [];
+        for (var i = 0; i < sides.length; i++) boxes.push(vbByName(sourceDoc, sz + '_' + sides[i] + '_FINAL'));
+        return unionBounds(boxes).height + padding * 2;
     }
 
     var placements = []; // { page, kind, sz, prefix, name, number, left, top }
@@ -387,10 +396,11 @@ function main() {
             ], p, '_SHIRT');
         }
         function buildPant(p) {
-            placeBlock([
-                dupPart(p.sz, 'LEFT_PANT',  p.prefix + '_LEFT_PANT',  p.name, p.number),
-                dupPart(p.sz, 'RIGHT_PANT', p.prefix + '_RIGHT_PANT', p.name, p.number)
-            ], p, '_PANT');
+            var sides = pantSides(sourceDoc, p.sz), parts = [];
+            for (var i = 0; i < sides.length; i++) {
+                parts.push(dupPart(p.sz, sides[i], p.prefix + '_' + sides[i], p.name, p.number));
+            }
+            placeBlock(parts, p, '_PANT');
         }
 
         for (var i = 0; i < placements.length; i++) {

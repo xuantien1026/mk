@@ -16,7 +16,9 @@ CancelledError.prototype = new Error();
 var BACK   = 'SAU';
 var FRONT  = 'TRUOC';
 var SLEEVE = 'TAY';
-var PANT   = 'QUAN';
+var PANT   = 'QUAN';   // 2-shape pant: one shape per leg (right is mirrored)
+var PANT1  = 'QUAN1';  // 4-shape pant: two left shapes (both mirrored for the right)
+var PANT2  = 'QUAN2';
 
 // SIZE label layout
 var SIZE_GLYPH_HEIGHT = 2 * PT_PER_MM;  // visible glyphs scaled to exactly 2mm tall
@@ -63,7 +65,8 @@ function recordVariant(name, variants) {
 // Open an outline file and collect the distinct style variants per position.
 function discoverVariants(file) {
     var variants = {};
-    variants[BACK] = []; variants[FRONT] = []; variants[SLEEVE] = []; variants[PANT] = [];
+    variants[BACK] = []; variants[FRONT] = []; variants[SLEEVE] = [];
+    variants[PANT] = []; variants[PANT1] = []; variants[PANT2] = [];
     var doc = app.open(file);
     for (var i = 0; i < doc.pageItems.length; i++) {
         recordVariant(doc.pageItems[i].name, variants);
@@ -87,7 +90,7 @@ function selectOptions() {
         variantsByPath[files[f].fsName] = discoverVariants(files[f]);
     }
 
-    var TYPES = [BACK, FRONT, SLEEVE, PANT];
+    var TYPES = [BACK, FRONT, SLEEVE, PANT, PANT1, PANT2];
 
     var dlg = new Window('dialog', 'Step 1 — Resize Options');
     dlg.orientation = 'column';
@@ -394,12 +397,19 @@ function main() {
     // pant groups — so a shirt-only or pant-only design file just works.
     var hasShirt = hasItem(mainDoc.pageItems, THAN_TRUOC) && hasItem(mainDoc.pageItems, THAN_SAU)
                 && hasItem(mainDoc.pageItems, TAY_TRAI)   && hasItem(mainDoc.pageItems, TAY_PHAI);
-    var hasPant  = hasItem(mainDoc.pageItems, QUAN_TRAI)  && hasItem(mainDoc.pageItems, QUAN_PHAI);
+    // Pants come in two flavours: the original 2-shape (one group per leg) or the
+    // 4-shape split (two pieces per leg). Detect per design; 4-shape wins if both sets
+    // of groups happen to be present.
+    var has4Pant = hasItem(mainDoc.pageItems, QUAN_TRAI1) && hasItem(mainDoc.pageItems, QUAN_TRAI2)
+                && hasItem(mainDoc.pageItems, QUAN_PHAI1) && hasItem(mainDoc.pageItems, QUAN_PHAI2);
+    var has2Pant = !has4Pant && hasItem(mainDoc.pageItems, QUAN_TRAI) && hasItem(mainDoc.pageItems, QUAN_PHAI);
+    var hasPant  = has4Pant || has2Pant;
     if (!hasShirt && !hasPant) {
-        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC/THAN_SAU/TAY_TRAI/TAY_PHAI) lẫn nhóm quần (QUAN_TRAI/QUAN_PHAI).');
+        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC/THAN_SAU/TAY_TRAI/TAY_PHAI) lẫn nhóm quần (QUAN_TRAI/QUAN_PHAI hoặc QUAN_TRAI1/QUAN_TRAI2/QUAN_PHAI1/QUAN_PHAI2).');
     }
 
-    var backShapes = {}, frontShapes = {}, sleeveShapes = {}, pantShapes = {};
+    var backShapes = {}, frontShapes = {}, sleeveShapes = {};
+    var pantShapes = {}, pantShapes1 = {}, pantShapes2 = {};
     for (var s = 0; s < options.sizes.length; s++) {
         var sz = options.sizes[s];
         function shapeName(sz, type, variant) {
@@ -413,24 +423,35 @@ function main() {
             sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, SLEEVE, options.variants[SLEEVE]), sourceDoc, outDoc);
             sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
         }
-        if (hasPant) {
+        if (has2Pant) {
             pantShapes[sz]        = copyItemToDoc(shapeName(sz, PANT,   options.variants[PANT]),   sourceDoc, outDoc);
             pantShapes[sz].name   = sz + '_PANT_SHAPE';
+        } else if (has4Pant) {
+            pantShapes1[sz]       = copyItemToDoc(shapeName(sz, PANT1,  options.variants[PANT1]),  sourceDoc, outDoc);
+            pantShapes1[sz].name  = sz + '_PANT1_SHAPE';
+            pantShapes2[sz]       = copyItemToDoc(shapeName(sz, PANT2,  options.variants[PANT2]),  sourceDoc, outDoc);
+            pantShapes2[sz].name  = sz + '_PANT2_SHAPE';
         }
     }
 
     sourceDoc.close(SaveOptions.DONOTSAVECHANGES);
 
-    var frontDesign, backDesign, leftSleeve, rightSleeve, leftPant, rightPant;
+    var frontDesign, backDesign, leftSleeve, rightSleeve;
+    var leftPant, rightPant, leftPant1, leftPant2, rightPant1, rightPant2;
     if (hasShirt) {
         frontDesign = requireItem(mainDoc.pageItems, THAN_TRUOC, mainDoc.name);
         backDesign  = requireItem(mainDoc.pageItems, THAN_SAU,   mainDoc.name);
         leftSleeve  = requireItem(mainDoc.pageItems, TAY_TRAI,   mainDoc.name);
         rightSleeve = requireItem(mainDoc.pageItems, TAY_PHAI,   mainDoc.name);
     }
-    if (hasPant) {
+    if (has2Pant) {
         leftPant    = requireItem(mainDoc.pageItems, QUAN_TRAI,  mainDoc.name);
         rightPant   = requireItem(mainDoc.pageItems, QUAN_PHAI,  mainDoc.name);
+    } else if (has4Pant) {
+        leftPant1   = requireItem(mainDoc.pageItems, QUAN_TRAI1, mainDoc.name);
+        leftPant2   = requireItem(mainDoc.pageItems, QUAN_TRAI2, mainDoc.name);
+        rightPant1  = requireItem(mainDoc.pageItems, QUAN_PHAI1, mainDoc.name);
+        rightPant2  = requireItem(mainDoc.pageItems, QUAN_PHAI2, mainDoc.name);
     }
 
     // nearSide: 'RIGHT' | 'LEFT' — which edge the SIZE label is inset from.
@@ -573,27 +594,46 @@ function main() {
         }
 
         if (hasPant) {
-            // The outline file holds only the LEFT pant shape — mirror it (negative X scale)
-            // for the right pant.
-            var pantShapeR = pantShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
-            pantShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
-            var leftPantGrp  = resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz, 'LEFT');
-            var rightPantGrp = resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz, 'RIGHT');
+            // The outline file holds only the LEFT pant shape(s) — mirror each
+            // (negative X scale) for the right leg. Build the list of masked pant pieces
+            // for whichever flavour this design uses, then lay them out the same way.
+            var pantGrps = [], pantTemps = [];
+            if (has2Pant) {
+                var pantShapeR = pantShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
+                pantShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
+                pantGrps.push(resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz, 'LEFT'));
+                pantGrps.push(resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz, 'RIGHT'));
+                pantTemps.push(pantShapes[sz], pantShapeR);
+            } else { // has4Pant
+                var s1R = pantShapes1[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
+                s1R.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
+                var s2R = pantShapes2[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
+                s2R.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
+                pantGrps.push(resizeAndMask(leftPant1,  pantShapes1[sz], sz + '_LEFT_PANT_1',  sz, 'LEFT'));
+                pantGrps.push(resizeAndMask(leftPant2,  pantShapes2[sz], sz + '_LEFT_PANT_2',  sz, 'LEFT'));
+                pantGrps.push(resizeAndMask(rightPant1, s1R,             sz + '_RIGHT_PANT_1', sz, 'RIGHT'));
+                pantGrps.push(resizeAndMask(rightPant2, s2R,             sz + '_RIGHT_PANT_2', sz, 'RIGHT'));
+                pantTemps.push(pantShapes1[sz], pantShapes2[sz], s1R, s2R);
+            }
 
-            var lPntVB  = visBounds(leftPantGrp), rPntVB = visBounds(rightPantGrp);
+            // Pant row: every piece side by side (L1 L2 R1 R2 for the 4-shape pant,
+            // left | right for the 2-shape pant), centered within the layout width.
+            var vbs = [], rowH = 0, rowW = 0;
+            for (var pi = 0; pi < pantGrps.length; pi++) {
+                vbs[pi] = visBounds(pantGrps[pi]);
+                if (vbs[pi].height > rowH) rowH = vbs[pi].height;
+                rowW += vbs[pi].width + (pi > 0 ? spacing : 0);
+            }
+            rowH += padding * 2;
+            var rowStartX = bgLeft + (bgWidth - rowW) / 2, px = rowStartX;
+            for (var pj = 0; pj < pantGrps.length; pj++) {
+                moveWithOutline(pantGrps[pj], px, currentTop - (rowH - vbs[pj].height) / 2);
+                px += vbs[pj].width + spacing;
+            }
 
-            // Row 2: left and right pant side by side.
-            var row2Height = Math.max(lPntVB.height, rPntVB.height) + padding * 2;
-            var row2Width  = lPntVB.width + spacing + rPntVB.width;
-            var row2StartX = bgLeft + (bgWidth - row2Width) / 2;
+            currentTop -= rowH;
 
-            moveWithOutline(leftPantGrp,  row2StartX,                          currentTop - (row2Height - lPntVB.height) / 2);
-            moveWithOutline(rightPantGrp, row2StartX + lPntVB.width + spacing, currentTop - (row2Height - rPntVB.height) / 2);
-
-            currentTop -= row2Height;
-
-            pantShapes[sz].remove();
-            pantShapeR.remove();
+            for (var pk = 0; pk < pantTemps.length; pk++) pantTemps[pk].remove();
         }
     }
 

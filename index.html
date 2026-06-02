@@ -184,12 +184,14 @@
         <td>Group thiết kế tay phải</td>
       </tr>
       <tr>
-        <td><code>QUAN_TRAI</code></td>
-        <td>Group thiết kế quần trái</td>
+        <td><code>QUAN_TRAI</code> / <code>QUAN_PHAI</code></td>
+        <td>Group thiết kế quần trái / phải — quần 2 mảnh (mỗi ống một group)</td>
       </tr>
       <tr>
-        <td><code>QUAN_PHAI</code></td>
-        <td>Group thiết kế quần phải</td>
+        <td><code>QUAN_TRAI1</code>, <code>QUAN_TRAI2</code><br>
+          <code>QUAN_PHAI1</code>, <code>QUAN_PHAI2</code></td>
+        <td>Quần 4 mảnh — mỗi ống tách thành 2 mảnh (trái: 1 &amp; 2, phải: 1 &amp; 2).
+          Dùng cách này <em>hoặc</em> quần 2 mảnh ở trên, không dùng cả hai.</td>
       </tr>
       <tr>
         <td><code>TEN</code></td>
@@ -213,8 +215,9 @@
       ra ngoài đường bao mà không làm sai tỉ lệ.</p>
     <p><strong>Áo / quần là tùy chọn:</strong> nếu file thiết kế có nhóm áo
       (<code>THAN_TRUOC</code>, <code>THAN_SAU</code>, <code>TAY_TRAI</code>, <code>TAY_PHAI</code>)
-      thì sẽ tạo áo; nếu có nhóm quần (<code>QUAN_TRAI</code>, <code>QUAN_PHAI</code>) thì sẽ tạo quần.
-      Chỉ cần một trong hai cũng được — script chỉ xuất phần có trong thiết kế.</p>
+      thì sẽ tạo áo; nếu có nhóm quần (<code>QUAN_TRAI</code>, <code>QUAN_PHAI</code> cho quần 2 mảnh,
+      hoặc <code>QUAN_TRAI1</code>/<code>QUAN_TRAI2</code>/<code>QUAN_PHAI1</code>/<code>QUAN_PHAI2</code> cho quần 4 mảnh)
+      thì sẽ tạo quần. Chỉ cần một trong hai cũng được — script chỉ xuất phần có trong thiết kế.</p>
   </blockquote>
 
   <hr>
@@ -244,7 +247,7 @@
       <tr>
         <td><code>{vị_trí}</code></td>
         <td><code>SAU</code> (mặt sau), <code>TRUOC</code> (mặt trước), <code>TAY</code> (tay áo),
-          <code>QUAN</code> (quần)</td>
+          <code>QUAN</code> (quần 2 mảnh), <code>QUAN1</code> / <code>QUAN2</code> (quần 4 mảnh — 2 mảnh ống trái)</td>
       </tr>
       <tr>
         <td><code>{tên_kiểu}</code></td>
