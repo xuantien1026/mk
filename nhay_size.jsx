@@ -609,25 +609,30 @@ function main() {
                 s1R.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
                 var s2R = pantShapes2[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
                 s2R.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
+                // Left leg: piece i's design (QUAN_TRAIi) clips shape QUANi. On the
+                // right leg the pieces cross over — the flipped QUAN1 shape takes the
+                // QUAN_PHAI2 design and the flipped QUAN2 shape takes QUAN_PHAI1.
                 pantGrps.push(resizeAndMask(leftPant1,  pantShapes1[sz], sz + '_LEFT_PANT_1',  sz, 'LEFT'));
                 pantGrps.push(resizeAndMask(leftPant2,  pantShapes2[sz], sz + '_LEFT_PANT_2',  sz, 'LEFT'));
-                pantGrps.push(resizeAndMask(rightPant1, s1R,             sz + '_RIGHT_PANT_1', sz, 'RIGHT'));
-                pantGrps.push(resizeAndMask(rightPant2, s2R,             sz + '_RIGHT_PANT_2', sz, 'RIGHT'));
+                pantGrps.push(resizeAndMask(rightPant1, s2R,             sz + '_RIGHT_PANT_1', sz, 'RIGHT'));
+                pantGrps.push(resizeAndMask(rightPant2, s1R,             sz + '_RIGHT_PANT_2', sz, 'RIGHT'));
                 pantTemps.push(pantShapes1[sz], pantShapes2[sz], s1R, s2R);
             }
 
             // Pant row: every piece side by side (L1 L2 R1 R2 for the 4-shape pant,
             // left | right for the 2-shape pant), centered within the layout width.
-            var vbs = [], rowH = 0, rowW = 0;
+            var vbs = [], maxH = 0, rowW = 0;
             for (var pi = 0; pi < pantGrps.length; pi++) {
                 vbs[pi] = visBounds(pantGrps[pi]);
-                if (vbs[pi].height > rowH) rowH = vbs[pi].height;
+                if (vbs[pi].height > maxH) maxH = vbs[pi].height;
                 rowW += vbs[pi].width + (pi > 0 ? spacing : 0);
             }
-            rowH += padding * 2;
+            var rowH = maxH + padding * 2;
             var rowStartX = bgLeft + (bgWidth - rowW) / 2, px = rowStartX;
+            // Align the pieces on their bottom edge (padding above the row bottom),
+            // rather than centering them vertically.
             for (var pj = 0; pj < pantGrps.length; pj++) {
-                moveWithOutline(pantGrps[pj], px, currentTop - (rowH - vbs[pj].height) / 2);
+                moveWithOutline(pantGrps[pj], px, currentTop - padding - (maxH - vbs[pj].height));
                 px += vbs[pj].width + spacing;
             }
 
