@@ -1,6 +1,7 @@
 #target illustrator
-#include "lib/quy_uoc_ten.jsx"
-#include "lib/cau_hinh.jsx"
+#include "lib/names.jsx"
+#include "lib/config.jsx"
+#include "lib/utils.jsx"
 
 var PT_PER_MM = 2.83465;
 
@@ -185,7 +186,7 @@ function requireItem(collection, name, fileName) {
 }
 
 // Existence check via the native getByName (fast, C-level) — do NOT use the scripted
-// findItemByName for this: it walks the whole document tree in interpreted code.
+// findAllItemsByName for this: it walks the whole document tree in interpreted code.
 function hasItem(collection, name) {
     try { collection.getByName(name); return true; } catch (e) { return false; }
 }
@@ -200,18 +201,6 @@ function copyItemToDoc(itemName, fromDoc, toDoc) {
     destLayer.locked = wasLocked;
     item.name = savedName;
     return copy;
-}
-
-function findItemByName(container, name) {
-    for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        if (item.name === name) return item;
-        if (item.typename === 'GroupItem') {
-            var found = findItemByName(item, name);
-            if (found) return found;
-        }
-    }
-    return null;
 }
 
 // TextFrame.geometricBounds extends to the font's descender line, not the actual
@@ -461,10 +450,22 @@ function main() {
         var visibleW  = preBounds[2] - preBounds[0];
         var visibleH  = preBounds[1] - preBounds[3];
 
+        // Scale width and height independently so the design's bounding path fills the
+        // shape exactly (the shape is then used as a clip mask).
         var scaleX = (maskShape.width  / visibleW) * 100;
         var scaleY = (maskShape.height / visibleH) * 100;
-        var scale  = Math.max(scaleX, scaleY);
-        designCopy.resize(scale, scale, true, true, true, true, true, Transformation.CENTER);
+        designCopy.resize(scaleX, scaleY, true, true, true, true, true, Transformation.CENTER);
+
+        // The independent scale distorts every LOGO inside the design. Restore each
+        // logo's aspect ratio: it was just scaled by scaleX horizontally and scaleY
+        // vertically, so correcting its height by scaleX/scaleY makes its net scale
+        // uniform at scaleX. Resize about each logo's own center so it stays put.
+        var logoHeightCorrection = (scaleX / scaleY) * 100;
+        var logos = findAllItemsByName(designCopy, LOGO);
+        for (var li = 0; li < logos.length; li++) {
+            logos[li].resize(100, logoHeightCorrection,
+                true, true, true, true, true, Transformation.CENTER);
+        }
 
         var postBounds  = boundingPath.geometricBounds;
         var visCenterX  = (postBounds[0] + postBounds[2]) / 2;

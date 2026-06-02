@@ -9,3 +9,4 @@ var QUAN_PHAI  = 'QUAN_PHAI';
 var TEN        = 'TEN';
 var SO         = 'SO';
 var SIZE       = 'SIZE';
+var LOGO       = 'LOGO';

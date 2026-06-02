@@ -1,6 +1,7 @@
 #target illustrator
-#include "lib/quy_uoc_ten.jsx"
-#include "lib/cau_hinh.jsx"
+#include "lib/names.jsx"
+#include "lib/config.jsx"
+#include "lib/utils.jsx"
 
 var PT_PER_MM = 2.83465;
 
@@ -167,16 +168,6 @@ function requireItem(collection, name, fileName) {
     } catch (e) {
         throw new Error('Khong tim thay "' + name + '" trong file ' + fileName);
     }
-}
-
-function findAllItemsByName(container, name, results) {
-    if (!results) results = [];
-    for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        if (item.name === name) results.push(item);
-        if (item.typename === 'GroupItem') findAllItemsByName(item, name, results);
-    }
-    return results;
 }
 
 function contains(arr, value) {
