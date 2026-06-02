@@ -4,6 +4,10 @@
 // groups). Returns an array (empty when none match).
 function findAllItemsByName(container, name, results) {
     if (!results) results = [];
+    // Only groups (and the document) have a .pageItems collection; a plain PathItem,
+    // CompoundPathItem or TextFrame has no children to search, so there is nothing to
+    // recurse into. Guard against it instead of dereferencing undefined .pageItems.
+    if (!container.pageItems) return results;
     for (var i = 0; i < container.pageItems.length; i++) {
         var item = container.pageItems[i];
         if (item.name === name) results.push(item);
