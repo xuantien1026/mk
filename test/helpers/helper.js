@@ -25,4 +25,12 @@ function makeDoc(names) {
     return { pageItems: names.map(function (n) { return { name: n }; }) };
 }
 
-module.exports = { makeEnv, makeDoc };
+// Loads the pure print-command parsing helpers (no names.jsx dependency).
+function makePrintEnv() {
+    const context = vm.createContext({});
+    const code = fs.readFileSync(path.join(ROOT, 'lib/print_command.jsx'), 'utf8');
+    vm.runInContext(code, context);
+    return context;
+}
+
+module.exports = { makeEnv, makeDoc, makePrintEnv };

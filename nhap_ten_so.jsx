@@ -2,6 +2,7 @@
 #include "lib/names.jsx"
 #include "lib/config.jsx"
 #include "lib/utils.jsx"
+#include "lib/print_command.jsx"
 
 var PT_PER_MM = 2.83465;
 
@@ -76,96 +77,36 @@ function getPrintWidth() {
     return v;
 }
 
-// Minimal RFC-4180 CSV parser: handles quoted fields, escaped "" quotes,
-// embedded commas/newlines, and \r\n or \n line endings.
-function parseCsv(text) {
-    var rows = [], row = [], field = '', inQuotes = false;
-    for (var i = 0; i < text.length; i++) {
-        var ch = text.charAt(i);
-        if (inQuotes) {
-            if (ch === '"') {
-                if (text.charAt(i + 1) === '"') { field += '"'; i++; }
-                else inQuotes = false;
-            } else field += ch;
-        } else if (ch === '"') {
-            inQuotes = true;
-        } else if (ch === ',') {
-            row.push(field); field = '';
-        } else if (ch === '\n') {
-            row.push(field); rows.push(row); row = []; field = '';
-        } else if (ch !== '\r') {
-            field += ch;
-        }
-    }
-    row.push(field); rows.push(row);
-    return rows;
+// Ask which Mẫu to print when the CSV mixes several. values is the list of raw
+// Mẫu strings (a blank '' is shown as "Trống"). Returns the chosen raw string,
+// or null on cancel.
+function selectVariant(values) {
+    var dlg = new Window('dialog', 'Chọn mẫu');
+    dlg.orientation = 'column';
+    dlg.alignChildren = 'fill';
+    dlg.add('statictext', undefined, 'Chọn mẫu cần in:');
+
+    var labels = [];
+    for (var i = 0; i < values.length; i++) labels.push(values[i] === '' ? 'Trống' : values[i]);
+    var dd = dlg.add('dropdownlist', undefined, labels);
+    dd.selection = 0;
+
+    var btns = dlg.add('group');
+    btns.alignment = 'center';
+    btns.add('button', undefined, 'OK',     {name: 'ok'});
+    btns.add('button', undefined, 'Cancel', {name: 'cancel'});
+
+    if (dlg.show() !== 1) return null;
+    return values[dd.selection.index];
 }
 
-// Lowercase + strip Vietnamese diacritics so header matching is case/accent
-// insensitive (and the patterns below stay plain ASCII).
-function foldAscii(s) {
-    s = s.replace(/^\s+|\s+$/g, '').toLowerCase();
-    var groups = {
-        'a': 'àáạảãâầấậẩẫăằắặẳẵ',
-        'e': 'èéẹẻẽêềếệểễ',
-        'i': 'ìíịỉĩ',
-        'o': 'òóọỏõôồốộổỗơờớợởỡ',
-        'u': 'ùúụủũưừứựửữ',
-        'y': 'ỳýỵỷỹ',
-        'd': 'đ'
-    };
-    var out = '';
-    for (var i = 0; i < s.length; i++) {
-        var ch = s.charAt(i), rep = ch;
-        for (var base in groups) {
-            if (groups[base].indexOf(ch) !== -1) { rep = base; break; }
-        }
-        out += rep;
-    }
-    return out;
-}
-
-function trimCell(cells, idx) {
-    if (idx < 0 || idx >= cells.length) return '';
-    return cells[idx].replace(/^\s+|\s+$/g, '');
-}
-
-// Read the CSV, locate the header row by its Size / Số Áo / Tên In Trên Áo
-// columns, and return the order rows as [{ size, name, number }].
+// Read the CSV and delegate parsing to parseOrders (lib/print_command.jsx).
 function parsePrintCommand(file) {
     file.encoding = 'UTF-8';
     if (!file.open('r')) throw new Error('Khong mo duoc file: ' + file.fsName);
     var text = file.read();
     file.close();
-    if (text.length && text.charCodeAt(0) === 0xFEFF) text = text.substring(1); // strip BOM
-
-    var rows = parseCsv(text);
-
-    var HDR_SIZE = 'size', HDR_SO = 'so ao', HDR_TEN = 'ten in tren ao';
-    var headerRow = -1, sizeCol = -1, soCol = -1, tenCol = -1;
-    for (var r = 0; r < rows.length && headerRow === -1; r++) {
-        var sCol = -1, nCol = -1, tCol = -1;
-        for (var c = 0; c < rows[r].length; c++) {
-            var key = foldAscii(rows[r][c]);
-            if      (key === HDR_SIZE) sCol = c;
-            else if (key === HDR_SO)   nCol = c;
-            else if (key === HDR_TEN)  tCol = c;
-        }
-        if (sCol !== -1 && nCol !== -1) { headerRow = r; sizeCol = sCol; soCol = nCol; tenCol = tCol; }
-    }
-    if (headerRow === -1) throw new Error('Khong tim thay bang du lieu (thieu cot Size / So Ao) trong file CSV.');
-
-    var orders = [];
-    for (var r = headerRow + 1; r < rows.length; r++) {
-        var size = trimCell(rows[r], sizeCol).toUpperCase();
-        if (size === '') continue; // not an order row
-        orders.push({
-            size:   size,
-            number: trimCell(rows[r], soCol),
-            name:   tenCol !== -1 ? trimCell(rows[r], tenCol) : ''
-        });
-    }
-    return orders;
+    return parseOrders(text);
 }
 
 // -------------------------------------------------------
@@ -178,11 +119,6 @@ function requireItem(collection, name, fileName) {
     } catch (e) {
         throw new Error('Khong tim thay "' + name + '" trong file ' + fileName);
     }
-}
-
-function contains(arr, value) {
-    for (var i = 0; i < arr.length; i++) if (arr[i] === value) return true;
-    return false;
 }
 
 // Fill every text frame named fieldName in container with value, or remove them
@@ -224,6 +160,17 @@ function main() {
 
     var rows = parsePrintCommand(file);
     if (rows.length === 0) { alert('Khong tim thay dong du lieu nao trong file.'); return; }
+
+    // If the CSV mixes several Mẫu, ask which one to print and keep only its rows.
+    // A single distinct value (incl. no Mẫu column / all blank) needs no prompt.
+    var distinct = distinctVariant(rows);
+    if (distinct.length > 1) {
+        var chosen = selectVariant(distinct);
+        if (chosen == null) return; // cancelled
+        var filtered = [];
+        for (var i = 0; i < rows.length; i++) if (rows[i].variant === chosen) filtered.push(rows[i]);
+        rows = filtered;
+    }
 
     // Group orders by size, ignoring any size that was not prepared in Step 1.
     var orders = {};
