@@ -194,40 +194,6 @@ function hasItem(collection, name) {
     try { collection.getByName(name); return true; } catch (e) { return false; }
 }
 
-// Design part names that must be unique across the whole document. A duplicate almost
-// always means a group/layer was copied by mistake — getByName would then silently pick
-// the first one and resize the wrong artwork — so we stop with a clear error instead.
-var UNIQUE_PART_NAMES = [
-    THAN_TRUOC, THAN_SAU, TAY_TRAI, TAY_PHAI,
-    QUAN_TRAI, QUAN_PHAI,
-    QUAN_TRAI1, QUAN_TRAI2, QUAN_PHAI1, QUAN_PHAI2
-];
-
-// Count how many items in the document carry `name`. doc.pageItems is already a
-// flat collection of every item in the document (including those nested in groups),
-// so we iterate it once — do NOT use findAllItemsByName here, which recurses into
-// groups and would double-count anything inside a group.
-function countItemsByName(doc, name) {
-    var items = doc.pageItems, count = 0;
-    for (var i = 0; i < items.length; i++) {
-        if (items[i].name === name) count++;
-    }
-    return count;
-}
-
-// Stop the script if any design part appears more than once in the document.
-function validateUniqueParts(doc) {
-    var dupes = [];
-    for (var i = 0; i < UNIQUE_PART_NAMES.length; i++) {
-        var name  = UNIQUE_PART_NAMES[i];
-        var count = countItemsByName(doc, name);
-        if (count > 1) dupes.push(name + ' (xuất hiện ' + count + ' lần)');
-    }
-    if (dupes.length > 0) {
-        throw new Error('File thiết kế có phần tử bị lặp — mỗi phần tử chỉ được xuất hiện 1 lần:\n- '
-            + dupes.join('\n- '));
-    }
-}
 
 function copyItemToDoc(itemName, fromDoc, toDoc) {
     var item = requireItem(fromDoc.pageItems, itemName, fromDoc.name);
@@ -416,7 +382,6 @@ function main() {
     // spends time in the options dialog. (selectOptions opens/closes outline files,
     // so capture the active design document first.)
     var mainDoc = app.activeDocument;
-    validateUniqueParts(mainDoc);
 
     var options   = selectOptions();
     var sourceDoc = app.open(options.file);
