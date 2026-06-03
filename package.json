@@ -1,0 +1,7 @@
+{
+  "name": "mk",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
