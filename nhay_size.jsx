@@ -2,6 +2,7 @@
 #include "lib/names.jsx"
 #include "lib/config.jsx"
 #include "lib/utils.jsx"
+#include "lib/validate.jsx"
 
 var PT_PER_MM = 2.83465;
 
@@ -194,6 +195,7 @@ function hasItem(collection, name) {
     try { collection.getByName(name); return true; } catch (e) { return false; }
 }
 
+
 function copyItemToDoc(itemName, fromDoc, toDoc) {
     var item = requireItem(fromDoc.pageItems, itemName, fromDoc.name);
     var savedName = item.name;
@@ -377,9 +379,13 @@ function placeSizeLabel(label, maskShape, nearSide, designCopy, doc) {
 // Main
 // -------------------------------------------------------
 function main() {
-    var options = selectOptions();
+    // Validate the design file before anything else — fail fast, before the user
+    // spends time in the options dialog. (selectOptions opens/closes outline files,
+    // so capture the active design document first.)
+    var mainDoc = app.activeDocument;
+    validateDocument(mainDoc);
 
-    var mainDoc   = app.activeDocument;
+    var options   = selectOptions();
     var sourceDoc = app.open(options.file);
 
     // Output goes to a brand-new document, not a layer in the design file.
@@ -405,7 +411,7 @@ function main() {
     var has2Pant = !has4Pant && hasItem(mainDoc.pageItems, QUAN_TRAI) && hasItem(mainDoc.pageItems, QUAN_PHAI);
     var hasPant  = has4Pant || has2Pant;
     if (!hasShirt && !hasPant) {
-        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC/THAN_SAU/TAY_TRAI/TAY_PHAI) lẫn nhóm quần (QUAN_TRAI/QUAN_PHAI hoặc QUAN_TRAI1/QUAN_TRAI2/QUAN_PHAI1/QUAN_PHAI2).');
+        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC + THAN_SAU + TAY_TRAI + TAY_PHAI) lẫn nhóm quần (QUAN_TRAI + QUAN_PHAI hoặc QUAN_TRAI1 + QUAN_TRAI2 + QUAN_PHAI1 + QUAN_PHAI2).');
     }
 
     var backShapes = {}, frontShapes = {}, sleeveShapes = {};
