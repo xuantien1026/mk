@@ -383,7 +383,7 @@ function main() {
     // spends time in the options dialog. (selectOptions opens/closes outline files,
     // so capture the active design document first.)
     var mainDoc = app.activeDocument;
-    validateUniqueParts(mainDoc);
+    validateDocument(mainDoc);
 
     var options   = selectOptions();
     var sourceDoc = app.open(options.file);
