@@ -282,6 +282,13 @@ function main() {
     }
     var numPages = pgCount;
 
+    // Stamp each placement with a global 1-based sequence number (placements is already
+    // in creation order). Zero-padded, it becomes the artboard-name prefix so a plain
+    // File ▸ Export ▸ Export As (sorted alphabetically) keeps the original order.
+    var seqWidth = String(placements.length).length;
+    function padSeq(n) { var s = String(n); while (s.length < seqWidth) s = '0' + s; return s; }
+    for (var i = 0; i < placements.length; i++) placements[i].seq = i + 1;
+
     // -------------------------------------------------------
     // Phase 2: save the masters once, then build each page inside its own copy.
     // -------------------------------------------------------
@@ -331,7 +338,7 @@ function main() {
                 ig.position = [ig.position[0] + dx, ig.position[1] + dy];
             }
 
-            doc.artboards.add([p.left, p.top, p.left + artboardWidth, p.top - (bb.height + padding * 2)]).name = p.prefix + suffix;
+            doc.artboards.add([p.left, p.top, p.left + artboardWidth, p.top - (bb.height + padding * 2)]).name = padSeq(p.seq) + '_' + p.prefix + suffix;
         }
 
         function buildShirt(p) {
