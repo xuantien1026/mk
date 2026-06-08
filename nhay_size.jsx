@@ -22,7 +22,7 @@ var PANT1  = 'QUAN1';  // 4-shape pant: two left shapes (both mirrored for the r
 var PANT2  = 'QUAN2';
 
 // SIZE label layout
-var SIZE_GLYPH_HEIGHT = 2 * PT_PER_MM;  // visible glyphs scaled to exactly 2mm tall
+var SIZE_GLYPH_HEIGHT = 3.5 * PT_PER_MM;  // visible glyphs scaled to exactly 3.5mm tall
 var SIZE_BOTTOM_GAP   = 1 * PT_PER_MM;  // glyph bottom sits 1mm above the design bottom edge
 var SIZE_SIDE_INSET   = 20 * PT_PER_MM; // horizontal inset from the near mask edge
 
