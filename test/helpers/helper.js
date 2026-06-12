@@ -21,8 +21,22 @@ function makeEnv() {
     return context;
 }
 
+// Each entry may be a string (a valid part with sensible default bounds) or an
+// object { name, geometricBounds?, typename?, pageItems? } to model degenerate or
+// grouped parts for the bounds check. Default bounds [0,10,10,0] => 10x10, valid.
 function makeDoc(names) {
-    return { pageItems: names.map(function (n) { return { name: n }; }) };
+    return {
+        pageItems: names.map(function (entry) {
+            if (typeof entry === 'string') entry = { name: entry };
+            var item = {
+                name:            entry.name,
+                typename:        entry.typename || 'PathItem',
+                geometricBounds: entry.geometricBounds || [0, 10, 10, 0]
+            };
+            if (entry.pageItems) item.pageItems = entry.pageItems;
+            return item;
+        })
+    };
 }
 
 // Loads the pure print-command parsing helpers (no names.jsx dependency).
