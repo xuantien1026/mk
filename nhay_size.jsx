@@ -481,7 +481,20 @@ function main() {
         // shape exactly (the shape is then used as a clip mask).
         var scaleX = (maskShape.width  / visibleW) * 100;
         var scaleY = (maskShape.height / visibleH) * 100;
+
+        // resize() corrupts the character stroke weight of point text (it collapses to
+        // ~1/100 of its value), wiping the visible border on labels like SO. Snapshot
+        // each stroked text frame's weight now so we can restore it after the resize.
+        var strokedText = collectStrokedTextFrames(designCopy);
+
         designCopy.resize(scaleX, scaleY, true, true, true, true, true, Transformation.CENTER);
+
+        // Restore each glyph border, scaled to match the new font size (the vertical
+        // scale, which drives glyph height), so the border stays proportional.
+        for (var ti = 0; ti < strokedText.length; ti++) {
+            strokedText[ti].frame.textRange.characterAttributes.strokeWeight =
+                strokedText[ti].weight * (scaleY / 100);
+        }
 
         // The independent scale distorts every LOGO inside the design. Restore each
         // logo's aspect ratio: it was just scaled by scaleX horizontally and scaleY

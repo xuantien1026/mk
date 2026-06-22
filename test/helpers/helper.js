@@ -47,4 +47,38 @@ function makePrintEnv() {
     return context;
 }
 
-module.exports = { makeEnv, makeDoc, makePrintEnv };
+// Loads the shared Illustrator helpers (lib/utils.jsx) in isolation — they only
+// traverse the DOM-shaped objects passed to them, so fake page items suffice.
+function makeUtilsEnv() {
+    const context = vm.createContext({});
+    const code = fs.readFileSync(path.join(ROOT, 'lib/utils.jsx'), 'utf8');
+    vm.runInContext(code, context);
+    return context;
+}
+
+// Build a fake TextFrame page item. strokeColorType 'NoColor' models an unstroked
+// glyph; any other value (e.g. 'CMYKColor') models a visible border.
+function textFrame(name, strokeWeight, strokeColorType) {
+    return {
+        name:     name,
+        typename: 'TextFrame',
+        textRange: {
+            characterAttributes: {
+                strokeColor:  { typename: strokeColorType || 'NoColor' },
+                strokeWeight: strokeWeight
+            }
+        }
+    };
+}
+
+// Build a fake GroupItem wrapping child page items.
+function groupItem(name, children) {
+    return { name: name, typename: 'GroupItem', pageItems: children };
+}
+
+// Build a fake container (document/group) exposing a pageItems collection.
+function container(children) {
+    return { pageItems: children };
+}
+
+module.exports = { makeEnv, makeDoc, makePrintEnv, makeUtilsEnv, textFrame, groupItem, container };
