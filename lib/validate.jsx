@@ -17,12 +17,15 @@ var PANT_4_PART_NAMES = [QUAN_TRAI1, QUAN_TRAI2, QUAN_PHAI1, QUAN_PHAI2];
 // UNIQUE_PART_NAMES covers every name any check cares about, so all the collect*
 // checks below can read from the returned maps without re-scanning the document.
 function countParts(doc) {
-    var counts = {}, items = {};
+    var counts = {}, items = {}, soItems = [];
     for (var i = 0; i < UNIQUE_PART_NAMES.length; i++) {
         counts[UNIQUE_PART_NAMES[i]] = 0;
         items[UNIQUE_PART_NAMES[i]]  = null;
     }
 
+    // Document.pageItems is the flattened list of every art object (including ones
+    // nested inside the design groups), so a single pass reaches every SO no matter
+    // how deeply it sits.
     var pageItems = doc.pageItems;
     for (var i = 0; i < pageItems.length; i++) {
         var n = pageItems[i].name;
@@ -30,8 +33,9 @@ function countParts(doc) {
             counts[n]++;
             items[n] = pageItems[i];
         }
+        if (n === SO) soItems.push(pageItems[i]);
     }
-    return { counts: counts, items: items };
+    return { counts: counts, items: items, soItems: soItems };
 }
 
 // Enforces "all present or none present" for a group of part names, reading from
@@ -116,6 +120,17 @@ function collectBoundsErrors(items) {
         + 'phải là một hình khép kín có chiều rộng và chiều cao khác 0:\n- ' + bad.join('\n- ')];
 }
 
+// Every SO element (the shirt/pant number) must be a TextFrame: nhap_ten_so fills it
+// via applyField, which only writes into text frames — so a group (or path) named SO
+// would silently never receive its number — and nhay_size keeps its glyph-stroke
+// border alive by treating it as text. Reads the SO items gathered by countParts.
+function collectSoErrors(soItems) {
+    for (var i = 0; i < soItems.length; i++) {
+        if (soItems[i].typename !== 'TextFrame') return ['"Số" phải là TextFrame (hiện là ' + soItems[i].typename + ')'];
+    }
+    return [];
+}
+
 // Runs every validation against the design document and, if anything fails,
 // throws a single Error listing all problems at once. The document is scanned
 // exactly once (countParts); every check reads from the resulting counts map.
@@ -128,6 +143,7 @@ function validateDocument(doc) {
     errors = errors.concat(collectShirtErrors(counts));
     errors = errors.concat(collectPantErrors(counts));
     errors = errors.concat(collectBoundsErrors(parts.items));
+    errors = errors.concat(collectSoErrors(parts.soItems));
 
     if (errors.length > 0) {
         throw new Error('File thiết kế không hợp lệ — vui lòng sửa các lỗi sau:\n\n'

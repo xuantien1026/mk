@@ -104,6 +104,39 @@ test('validateDocument reports a degenerate bounding path', function () {
     assert.throws(() => validateDocument(doc), /khung bao bị lỗi/i);
 });
 
+test('no SO error when SO is a text frame', function () {
+    const { collectSoErrors, countParts } = makeEnv();
+    const doc = makeDoc([
+        'THAN_TRUOC', 'THAN_SAU', 'TAY_TRAI', 'TAY_PHAI',
+        { name: 'SO', typename: 'TextFrame' }
+    ]);
+    assert.equal(collectSoErrors(countParts(doc).soItems).length, 0);
+});
+
+test('no SO error when the document has no SO at all', function () {
+    const { collectSoErrors, countParts } = makeEnv();
+    const doc = makeDoc(['THAN_TRUOC', 'THAN_SAU', 'TAY_TRAI', 'TAY_PHAI']);
+    assert.equal(collectSoErrors(countParts(doc).soItems).length, 0);
+});
+
+test('reports an SO error, naming its actual type, when SO is not a text frame', function () {
+    const { collectSoErrors, countParts } = makeEnv();
+    const doc = makeDoc([{ name: 'SO', typename: 'GroupItem' }]);
+    const errors = collectSoErrors(countParts(doc).soItems);
+    assert.equal(errors.length, 1);
+    assert.ok(errors[0].includes('TextFrame'), 'should state the required type');
+    assert.ok(errors[0].includes('GroupItem'), 'should state the actual type');
+});
+
+test('validateDocument throws when SO is not a text frame', function () {
+    const { validateDocument } = makeEnv();
+    const doc = makeDoc([
+        'THAN_TRUOC', 'THAN_SAU', 'TAY_TRAI', 'TAY_PHAI',
+        { name: 'SO', typename: 'PathItem' }
+    ]);
+    assert.throws(() => validateDocument(doc), /"Số" phải là TextFrame/);
+});
+
 test('performance: validateDocument on 50,000 irrelevant items completes in under 50ms', function () {
     const { validateDocument } = makeEnv();
     const names = [];
