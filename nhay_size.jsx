@@ -22,9 +22,8 @@ var PANT1  = 'QUAN1';  // 4-shape pant: two left shapes (both mirrored for the r
 var PANT2  = 'QUAN2';
 
 // SIZE label layout
-var SIZE_GLYPH_HEIGHT = 3.5 * PT_PER_MM;  // visible glyphs scaled to exactly 3.5mm tall
+var SIZE_GLYPH_HEIGHT = 5 * PT_PER_MM;  // visible glyphs scaled to exactly 5mm tall
 var SIZE_BOTTOM_GAP   = 1 * PT_PER_MM;  // glyph bottom sits 1mm above the design bottom edge
-var SIZE_SIDE_INSET   = 20 * PT_PER_MM; // horizontal inset from the near mask edge
 
 // -------------------------------------------------------
 // Outline files: discovered from the file_rap folder next to the script.
@@ -337,9 +336,9 @@ function blackOrWhite(doc, white) {
 }
 
 // Scale the SIZE label to SIZE_GLYPH_HEIGHT and place its glyph bottom SIZE_BOTTOM_GAP
-// above the design's bottom edge, inset SIZE_SIDE_INSET from the near side (nearSide is
-// 'RIGHT' or 'LEFT'), then tuck it in front of the design.
-function placeSizeLabel(label, maskShape, nearSide, designCopy, doc) {
+// above the design's bottom edge, centered horizontally within the shape, then tuck it
+// in front of the design.
+function placeSizeLabel(label, maskShape, designCopy, doc) {
     var gb     = glyphBounds(label);
     var glyphH = gb[1] - gb[3];
     if (glyphH > 0) {
@@ -348,20 +347,19 @@ function placeSizeLabel(label, maskShape, nearSide, designCopy, doc) {
     }
 
     var maskBottom = maskShape.position[1] - maskShape.height;
-    var bounds     = label.geometricBounds;
     var newY = label.position[1] + (maskBottom + SIZE_BOTTOM_GAP - glyphBounds(label)[3]);
 
     // The bottom of a piece (a sleeve especially) can be narrower than its bounding box,
-    // so inset from the shape's ACTUAL edge at the label's height, not the box edge.
+    // so center on the shape's ACTUAL span at the label's height, not the box center.
     var segs = [], paths = collectPaths(maskShape);
     for (var i = 0; i < paths.length; i++) flattenSegments(paths[i], 24, segs);
     var span      = spanAtY(segs, maskBottom + SIZE_BOTTOM_GAP + SIZE_GLYPH_HEIGHT / 2);
-    var edgeLeft  = span ? span.left  : maskShape.position[0];
-    var edgeRight = span ? span.right : maskShape.position[0] + maskShape.width;
+    var centerX   = span ? (span.left + span.right) / 2
+                         : maskShape.position[0] + maskShape.width / 2;
 
-    var newX = (nearSide === 'RIGHT')
-        ? label.position[0] + (edgeRight - SIZE_SIDE_INSET - bounds[2])
-        : label.position[0] + (edgeLeft  + SIZE_SIDE_INSET - bounds[0]);
+    var gx        = glyphBounds(label);
+    var glyphMidX = (gx[0] + gx[2]) / 2;
+    var newX      = label.position[0] + (centerX - glyphMidX);
     label.position = [newX, newY];
 
     // Contrasting fill so the label reads over the design: sample the frontmost solid
@@ -460,8 +458,7 @@ function main() {
         rightPant2  = requireItem(mainDoc.pageItems, QUAN_PHAI2, mainDoc.name);
     }
 
-    // nearSide: 'RIGHT' | 'LEFT' — which edge the SIZE label is inset from.
-    function resizeAndMask(design, maskShape, instanceName, sizeName, nearSide) {
+    function resizeAndMask(design, maskShape, instanceName, sizeName) {
         var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         designCopy.name = instanceName + '_DESIGN';
 
@@ -526,7 +523,7 @@ function main() {
         clipGroup.clipped = true;
 
         // Create the SIZE label and place it relative to the masked design.
-        placeSizeLabel(makeSizeLabel(sizeName, outputLayer), maskShape, nearSide, designCopy, outDoc);
+        placeSizeLabel(makeSizeLabel(sizeName, outputLayer), maskShape, designCopy, outDoc);
 
         var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         outlineShape.name = instanceName + '_OUTLINE';
@@ -578,14 +575,14 @@ function main() {
         var sz = options.sizes[s];
 
         if (hasShirt) {
-            var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz, 'LEFT');
-            var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz, 'RIGHT');
+            var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz);
+            var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz);
             // The outline file holds only the LEFT sleeve shape — mirror it (negative X
             // scale) for the right sleeve.
             var sleeveShapeR = sleeveShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
             sleeveShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
-            var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz, 'LEFT');
-            var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz, 'RIGHT');
+            var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz);
+            var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz);
 
             var frontVB = visBounds(frontGrp), backVB = visBounds(backGrp);
             var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
@@ -620,8 +617,8 @@ function main() {
             if (has2Pant) {
                 var pantShapeR = pantShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
                 pantShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
-                pantGrps.push(resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz, 'LEFT'));
-                pantGrps.push(resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz, 'RIGHT'));
+                pantGrps.push(resizeAndMask(leftPant,  pantShapes[sz], sz + '_LEFT_PANT',  sz));
+                pantGrps.push(resizeAndMask(rightPant, pantShapeR,     sz + '_RIGHT_PANT', sz));
                 pantTemps.push(pantShapes[sz], pantShapeR);
             } else { // has4Pant
                 var s1R = pantShapes1[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
@@ -631,10 +628,10 @@ function main() {
                 // Left leg: piece i's design (QUAN_TRAIi) clips shape QUANi. On the
                 // right leg the pieces cross over — the flipped QUAN1 shape takes the
                 // QUAN_PHAI2 design and the flipped QUAN2 shape takes QUAN_PHAI1.
-                pantGrps.push(resizeAndMask(leftPant1,  pantShapes1[sz], sz + '_LEFT_PANT_1',  sz, 'LEFT'));
-                pantGrps.push(resizeAndMask(leftPant2,  pantShapes2[sz], sz + '_LEFT_PANT_2',  sz, 'LEFT'));
-                pantGrps.push(resizeAndMask(rightPant1, s2R,             sz + '_RIGHT_PANT_1', sz, 'RIGHT'));
-                pantGrps.push(resizeAndMask(rightPant2, s1R,             sz + '_RIGHT_PANT_2', sz, 'RIGHT'));
+                pantGrps.push(resizeAndMask(leftPant1,  pantShapes1[sz], sz + '_LEFT_PANT_1',  sz));
+                pantGrps.push(resizeAndMask(leftPant2,  pantShapes2[sz], sz + '_LEFT_PANT_2',  sz));
+                pantGrps.push(resizeAndMask(rightPant1, s2R,             sz + '_RIGHT_PANT_1', sz));
+                pantGrps.push(resizeAndMask(rightPant2, s1R,             sz + '_RIGHT_PANT_2', sz));
                 pantTemps.push(pantShapes1[sz], pantShapes2[sz], s1R, s2R);
             }
 
