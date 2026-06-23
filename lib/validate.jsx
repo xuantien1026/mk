@@ -30,14 +30,24 @@ function countParts(doc) {
     // Document.pageItems is the flattened list of every art object (including ones
     // nested inside the design groups), so a single pass reaches every SO no matter
     // how deeply it sits.
+    //
+    // Performance: in ExtendScript every collection access crosses into Illustrator,
+    // so on a detailed design (tens of thousands of art objects) this loop dominates
+    // the script's startup time. Cache the length once (otherwise it is re-queried
+    // every iteration) and dereference each item once into a local. Most art objects
+    // are unnamed, so skip empty names before any further work.
     var pageItems = doc.pageItems;
-    for (var i = 0; i < pageItems.length; i++) {
-        var n = pageItems[i].name;
+    var len = pageItems.length;
+    for (var i = 0; i < len; i++) {
+        var it = pageItems[i];
+        var n  = it.name;
+        if (!n) continue;
         if (counts.hasOwnProperty(n)) {
             counts[n]++;
-            items[n] = pageItems[i];
+            items[n] = it;
+        } else if (n === SO) {
+            soItems.push(it);
         }
-        if (n === SO) soItems.push(pageItems[i]);
     }
     return { counts: counts, items: items, soItems: soItems };
 }

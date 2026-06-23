@@ -204,6 +204,11 @@ function copyItemToDoc(itemName, fromDoc, toDoc) {
     var copy = item.duplicate(destLayer, ElementPlacement.PLACEATEND);
     destLayer.locked = wasLocked;
     item.name = savedName;
+    // The caller renames this copy for layout (e.g. "XS_PANT_SHAPE"), which loses the
+    // original outline (rập) name. Stash it in .note so error messages can report the
+    // real shape name (e.g. "XS_QUAN_DAIROI"). .note survives duplicate(), so mirrored
+    // copies carry it too.
+    copy.note = savedName;
     return copy;
 }
 
@@ -399,8 +404,10 @@ function main() {
 
     // Produce shirts only if the design has the shirt groups, pants only if it has the
     // pant groups — so a shirt-only or pant-only design file just works.
-    var hasShirt = hasItem(mainDoc.pageItems, THAN_TRUOC) && hasItem(mainDoc.pageItems, THAN_SAU)
-                && hasItem(mainDoc.pageItems, TAY_TRAI)   && hasItem(mainDoc.pageItems, TAY_PHAI);
+    // A shirt is defined by its body (front + back). Sleeves are optional: some shirts
+    // — e.g. basketball jerseys — have none, so detect them separately.
+    var hasShirt   = hasItem(mainDoc.pageItems, THAN_TRUOC) && hasItem(mainDoc.pageItems, THAN_SAU);
+    var hasSleeves = hasShirt && hasItem(mainDoc.pageItems, TAY_TRAI) && hasItem(mainDoc.pageItems, TAY_PHAI);
     // Pants come in two flavours: the original 2-shape (one group per leg) or the
     // 4-shape split (two pieces per leg). Detect per design; 4-shape wins if both sets
     // of groups happen to be present.
@@ -409,7 +416,7 @@ function main() {
     var has2Pant = !has4Pant && hasItem(mainDoc.pageItems, QUAN_TRAI) && hasItem(mainDoc.pageItems, QUAN_PHAI);
     var hasPant  = has4Pant || has2Pant;
     if (!hasShirt && !hasPant) {
-        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC + THAN_SAU + TAY_TRAI + TAY_PHAI) lẫn nhóm quần (QUAN_TRAI + QUAN_PHAI hoặc QUAN_TRAI1 + QUAN_TRAI2 + QUAN_PHAI1 + QUAN_PHAI2).');
+        throw new Error('File thiết kế không có nhóm thân áo (THAN_TRUOC + THAN_SAU) lẫn nhóm quần (QUAN_TRAI + QUAN_PHAI hoặc QUAN_TRAI1 + QUAN_TRAI2 + QUAN_PHAI1 + QUAN_PHAI2).');
     }
 
     var backShapes = {}, frontShapes = {}, sleeveShapes = {};
@@ -424,8 +431,10 @@ function main() {
             backShapes[sz].name   = sz + '_BACK_SHAPE';
             frontShapes[sz]       = copyItemToDoc(shapeName(sz, FRONT,  options.variants[FRONT]),  sourceDoc, outDoc);
             frontShapes[sz].name  = sz + '_FRONT_SHAPE';
-            sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, SLEEVE, options.variants[SLEEVE]), sourceDoc, outDoc);
-            sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
+            if (hasSleeves) {
+                sleeveShapes[sz]      = copyItemToDoc(shapeName(sz, SLEEVE, options.variants[SLEEVE]), sourceDoc, outDoc);
+                sleeveShapes[sz].name = sz + '_SLEEVE_SHAPE';
+            }
         }
         if (has2Pant) {
             pantShapes[sz]        = copyItemToDoc(shapeName(sz, PANT,   options.variants[PANT]),   sourceDoc, outDoc);
@@ -445,8 +454,10 @@ function main() {
     if (hasShirt) {
         frontDesign = requireItem(mainDoc.pageItems, THAN_TRUOC, mainDoc.name);
         backDesign  = requireItem(mainDoc.pageItems, THAN_SAU,   mainDoc.name);
-        leftSleeve  = requireItem(mainDoc.pageItems, TAY_TRAI,   mainDoc.name);
-        rightSleeve = requireItem(mainDoc.pageItems, TAY_PHAI,   mainDoc.name);
+        if (hasSleeves) {
+            leftSleeve  = requireItem(mainDoc.pageItems, TAY_TRAI,   mainDoc.name);
+            rightSleeve = requireItem(mainDoc.pageItems, TAY_PHAI,   mainDoc.name);
+        }
     }
     if (has2Pant) {
         leftPant    = requireItem(mainDoc.pageItems, QUAN_TRAI,  mainDoc.name);
@@ -478,6 +489,22 @@ function main() {
         // shape exactly (the shape is then used as a clip mask).
         var scaleX = (maskShape.width  / visibleW) * 100;
         var scaleY = (maskShape.height / visibleH) * 100;
+
+        // A zero/degenerate dimension on either the design's bounding path or the outline
+        // mask shape makes scaleX/scaleY (and the LOGO correction derived from them) 0,
+        // Infinity or NaN, which later makes resize() throw the opaque "Illegal argument
+        // ... numeric value expected". The design bounding path is checked up front by
+        // validateDocument, but the mask shapes come from the outline (rập) file, which
+        // isn't validated — and a stray empty/0x0 object there is easy to miss. Catch it
+        // here and report which part, size and shape so the rập file can be fixed.
+        if (!isFinite(scaleX) || !isFinite(scaleY) || scaleX <= 0 || scaleY <= 0) {
+            var shapeName = maskShape.note ? maskShape.note : maskShape.name;
+            throw new Error('Không thể nhảy size cho ' + design.name + ', size ' + sizeName + ' — hình khuôn trong file rập bị lỗi.\n'
+                + 'Hình khuôn "' + shapeName + '": rộng=' + maskShape.width + ', cao=' + maskShape.height + '\n'
+                + 'Khung thiết kế: rộng=' + visibleW + ', cao=' + visibleH + '\n'
+                + 'Kiểm tra file rập: hình khuôn phải là hình khép kín có chiều rộng và chiều cao khác 0 '
+                + '(thường do còn sót một đối tượng rỗng trùng tên).');
+        }
 
         // resize() corrupts the character stroke weight of point text (it collapses to
         // ~1/100 of its value), wiping the visible border on labels like SO. Snapshot
@@ -577,36 +604,51 @@ function main() {
         if (hasShirt) {
             var backGrp     = resizeAndMask(backDesign,  backShapes[sz],   sz + '_BACK',         sz);
             var frontGrp    = resizeAndMask(frontDesign, frontShapes[sz],  sz + '_FRONT',        sz);
-            // The outline file holds only the LEFT sleeve shape — mirror it (negative X
-            // scale) for the right sleeve.
-            var sleeveShapeR = sleeveShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
-            sleeveShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
-            var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz);
-            var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz);
 
             var frontVB = visBounds(frontGrp), backVB = visBounds(backGrp);
-            var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
 
-            // Row 1: front, back, and the sleeve column (left sleeve stacked over right).
-            var sleeveColHeight = lSlvVB.height + spacing + rSlvVB.height;
-            var sleeveColWidth  = Math.max(lSlvVB.width, rSlvVB.width);
-            var row1Height      = Math.max(frontVB.height, backVB.height, sleeveColHeight) + padding * 2;
-            var row1Width       = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth;
-            var row1StartX      = bgLeft + (bgWidth - row1Width) / 2;
-            var sleeveColX      = row1StartX + frontVB.width + spacing + backVB.width + spacing;
-            var sleeveColTop    = currentTop - (row1Height - sleeveColHeight) / 2;
+            if (hasSleeves) {
+                // The outline file holds only the LEFT sleeve shape — mirror it (negative X
+                // scale) for the right sleeve.
+                var sleeveShapeR = sleeveShapes[sz].duplicate(outputLayer, ElementPlacement.PLACEATEND);
+                sleeveShapeR.resize(-100, 100, true, true, true, true, true, Transformation.CENTER);
+                var leftSlvGrp  = resizeAndMask(leftSleeve,  sleeveShapes[sz], sz + '_LEFT_SLEEVE',  sz);
+                var rightSlvGrp = resizeAndMask(rightSleeve, sleeveShapeR,     sz + '_RIGHT_SLEEVE', sz);
 
-            moveWithOutline(frontGrp,    row1StartX,                                       currentTop - (row1Height - frontVB.height) / 2);
-            moveWithOutline(backGrp,     row1StartX + frontVB.width + spacing,             currentTop - (row1Height - backVB.height)  / 2);
-            moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - lSlvVB.width) / 2, sleeveColTop);
-            moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rSlvVB.width) / 2, sleeveColTop - lSlvVB.height - spacing);
+                var lSlvVB  = visBounds(leftSlvGrp), rSlvVB = visBounds(rightSlvGrp);
 
-            currentTop -= row1Height;
+                // Row 1: front, back, and the sleeve column (left sleeve stacked over right).
+                var sleeveColHeight = lSlvVB.height + spacing + rSlvVB.height;
+                var sleeveColWidth  = Math.max(lSlvVB.width, rSlvVB.width);
+                var row1Height      = Math.max(frontVB.height, backVB.height, sleeveColHeight) + padding * 2;
+                var row1Width       = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth;
+                var row1StartX      = bgLeft + (bgWidth - row1Width) / 2;
+                var sleeveColX      = row1StartX + frontVB.width + spacing + backVB.width + spacing;
+                var sleeveColTop    = currentTop - (row1Height - sleeveColHeight) / 2;
+
+                moveWithOutline(frontGrp,    row1StartX,                                       currentTop - (row1Height - frontVB.height) / 2);
+                moveWithOutline(backGrp,     row1StartX + frontVB.width + spacing,             currentTop - (row1Height - backVB.height)  / 2);
+                moveWithOutline(leftSlvGrp,  sleeveColX + (sleeveColWidth - lSlvVB.width) / 2, sleeveColTop);
+                moveWithOutline(rightSlvGrp, sleeveColX + (sleeveColWidth - rSlvVB.width) / 2, sleeveColTop - lSlvVB.height - spacing);
+
+                currentTop -= row1Height;
+
+                sleeveShapes[sz].remove();
+                sleeveShapeR.remove();
+            } else {
+                // Sleeveless (e.g. basketball jersey): row 1 is just front and back side by side.
+                var row1Height = Math.max(frontVB.height, backVB.height) + padding * 2;
+                var row1Width  = frontVB.width + spacing + backVB.width;
+                var row1StartX = bgLeft + (bgWidth - row1Width) / 2;
+
+                moveWithOutline(frontGrp, row1StartX,                           currentTop - (row1Height - frontVB.height) / 2);
+                moveWithOutline(backGrp,  row1StartX + frontVB.width + spacing, currentTop - (row1Height - backVB.height)  / 2);
+
+                currentTop -= row1Height;
+            }
 
             backShapes[sz].remove();
             frontShapes[sz].remove();
-            sleeveShapes[sz].remove();
-            sleeveShapeR.remove();
         }
 
         if (hasPant) {
