@@ -45,13 +45,13 @@ test('validateDocument passes on an empty document', function () {
 
 test('validateDocument reports duplicate, shirt and pant errors all at once', function () {
     const { validateDocument } = makeEnv();
-    // THAN_TRUOC duplicated, shirt incomplete (no sleeves), 2-piece pant missing a half.
-    const doc = makeDoc(['THAN_TRUOC', 'THAN_TRUOC', 'THAN_SAU', 'QUAN_TRAI']);
+    // THAN_TRUOC duplicated, shirt body incomplete (missing THAN_SAU), 2-piece pant missing a half.
+    const doc = makeDoc(['THAN_TRUOC', 'THAN_TRUOC', 'TAY_TRAI', 'TAY_PHAI', 'QUAN_TRAI']);
     assert.throws(
         () => validateDocument(doc),
         function (err) {
             assert.ok(err.message.includes('bị lặp'),   'should report the duplicate');
-            assert.ok(err.message.includes('TAY_TRAI'), 'should report the missing shirt part');
+            assert.ok(err.message.includes('THAN_SAU'), 'should report the missing shirt part');
             assert.ok(err.message.includes('QUAN_PHAI'),'should report the missing pant half');
             return true;
         }

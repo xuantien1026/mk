@@ -4,7 +4,11 @@ var UNIQUE_PART_NAMES = [
     QUAN_TRAI1, QUAN_TRAI2, QUAN_PHAI1, QUAN_PHAI2
 ];
 
-var SHIRT_PART_NAMES = [THAN_TRUOC, THAN_SAU, TAY_TRAI, TAY_PHAI];
+// A shirt's body (front + back) is always required. Sleeves are an independent
+// all-or-none group: most shirts have both, but some — e.g. basketball jerseys —
+// have neither. Each group is validated separately so a sleeveless design passes.
+var SHIRT_BODY_PART_NAMES   = [THAN_TRUOC, THAN_SAU];
+var SHIRT_SLEEVE_PART_NAMES = [TAY_TRAI, TAY_PHAI];
 
 // 2-shape pant and 4-shape pant are independent schemes — a design uses one or
 // the other. Each scheme is all-or-none on its own.
@@ -70,10 +74,23 @@ function collectDuplicateErrors(counts) {
 }
 
 function collectShirtErrors(counts) {
-    var missing = findPartialGroup(counts, SHIRT_PART_NAMES);
-    if (missing.length === 0) return [];
-    return ['File thiết kế thiếu phần tử của áo — áo phải có đủ 4 phần (THAN_TRUOC, THAN_SAU, TAY_TRAI, TAY_PHAI).\n'
-        + 'Thiếu:\n- ' + missing.join('\n- ')];
+    var errors = [];
+
+    var missingBody = findPartialGroup(counts, SHIRT_BODY_PART_NAMES);
+    if (missingBody.length > 0) {
+        errors.push('File thiết kế thiếu phần thân áo — áo phải có đủ THAN_TRUOC, THAN_SAU.\n'
+            + 'Thiếu:\n- ' + missingBody.join('\n- '));
+    }
+
+    // Sleeves are optional (e.g. áo bóng rổ không có tay), but all-or-none: if one
+    // sleeve is present the other must be too.
+    var missingSleeve = findPartialGroup(counts, SHIRT_SLEEVE_PART_NAMES);
+    if (missingSleeve.length > 0) {
+        errors.push('File thiết kế thiếu tay áo — nếu có tay áo thì phải có đủ TAY_TRAI, TAY_PHAI.\n'
+            + 'Thiếu:\n- ' + missingSleeve.join('\n- '));
+    }
+
+    return errors;
 }
 
 function collectPantErrors(counts) {

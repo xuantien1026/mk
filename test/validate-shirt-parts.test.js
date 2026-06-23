@@ -25,20 +25,34 @@ test('no error alongside other parts when shirt is complete', function () {
     assert.equal(collectShirtErrors(countParts(doc).counts).length, 0);
 });
 
-test('reports an error when one shirt part is missing', function () {
+test('no error for a sleeveless shirt (e.g. basketball)', function () {
+    const { collectShirtErrors, countParts } = makeEnv();
+    const doc = makeDoc(['THAN_TRUOC', 'THAN_SAU']);
+    assert.equal(collectShirtErrors(countParts(doc).counts).length, 0);
+});
+
+test('reports an error when one sleeve is missing', function () {
     const { collectShirtErrors, countParts } = makeEnv();
     const doc = makeDoc(['THAN_TRUOC', 'THAN_SAU', 'TAY_TRAI']);
     const errors = collectShirtErrors(countParts(doc).counts);
     assert.equal(errors.length, 1);
-    assert.ok(errors[0].includes('TAY_PHAI'), 'message should name the missing part');
+    assert.ok(errors[0].includes('TAY_PHAI'), 'message should name the missing sleeve');
 });
 
-test('reports all missing parts when only one shirt part is present', function () {
+test('reports an error when a body part is missing', function () {
     const { collectShirtErrors, countParts } = makeEnv();
-    const doc = makeDoc(['THAN_TRUOC']);
+    const doc = makeDoc(['THAN_TRUOC', 'TAY_TRAI', 'TAY_PHAI']);
     const errors = collectShirtErrors(countParts(doc).counts);
     assert.equal(errors.length, 1);
-    assert.ok(errors[0].includes('THAN_SAU'), 'should list THAN_SAU as missing');
-    assert.ok(errors[0].includes('TAY_TRAI'), 'should list TAY_TRAI as missing');
-    assert.ok(errors[0].includes('TAY_PHAI'), 'should list TAY_PHAI as missing');
+    assert.ok(errors[0].includes('THAN_SAU'), 'message should name the missing body part');
+});
+
+test('reports both body and sleeve errors when only one part is present', function () {
+    const { collectShirtErrors, countParts } = makeEnv();
+    const doc = makeDoc(['THAN_TRUOC', 'TAY_TRAI']);
+    const errors = collectShirtErrors(countParts(doc).counts);
+    assert.equal(errors.length, 2);
+    const joined = errors.join('\n');
+    assert.ok(joined.includes('THAN_SAU'), 'should list THAN_SAU as missing');
+    assert.ok(joined.includes('TAY_PHAI'), 'should list TAY_PHAI as missing');
 });
