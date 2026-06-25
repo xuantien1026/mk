@@ -24,6 +24,7 @@ var PANT2  = 'QUAN2';
 // SIZE label layout
 var SIZE_GLYPH_HEIGHT = 5 * PT_PER_MM;  // visible glyphs scaled to exactly 5mm tall
 var SIZE_BOTTOM_GAP   = 1 * PT_PER_MM;  // glyph bottom sits 1mm above the design bottom edge
+var SIZE_STROKE_WEIGHT = 0.2 * PT_PER_MM; // black outline around the white SIZE glyphs
 
 // -------------------------------------------------------
 // Outline files: discovered from the file_rap folder next to the script.
@@ -223,9 +224,9 @@ function glyphBounds(textFrame) {
     return b;
 }
 
-// Build the SIZE label from scratch. We know its text, glyph height and placement, so
+// Build a SIZE label from scratch. We know its text, glyph height and placement, so
 // the design file no longer has to provide a SIZE text frame. Created on parkLayer;
-// placeSizeLabel then scales and positions it.
+// placeSizeLabel then scales, positions and styles it.
 function makeSizeLabel(sizeName, parkLayer) {
     var label = parkLayer.textFrames.add();
     label.contents = sizeName;
@@ -286,52 +287,6 @@ function spanAtY(segs, Y) {
     return (min === null) ? null : { left: min, right: max };
 }
 
-// b = [left, top, right, bottom] (top > bottom); is point [x, y] inside it?
-function boundsContain(b, pt) {
-    return pt[0] >= b[0] && pt[0] <= b[2] && pt[1] <= b[1] && pt[1] >= b[3];
-}
-
-// Frontmost filled path under a point — walk the design front-to-back (pageItems[0] is
-// on top) and return the first filled path/compound whose bounds contain the point.
-// Containment is by bounding box, so overlaps aren't resolved exactly. Null if none.
-function fillColorAtPoint(item, pt) {
-    if (item.typename === 'GroupItem') {
-        for (var i = 0; i < item.pageItems.length; i++) {
-            var c = fillColorAtPoint(item.pageItems[i], pt);
-            if (c) return c;
-        }
-        return null;
-    }
-    if (item.typename === 'CompoundPathItem') {
-        if (boundsContain(item.geometricBounds, pt) && item.pathItems.length && item.pathItems[0].filled) {
-            return item.pathItems[0].fillColor;
-        }
-        return null;
-    }
-    if (item.typename === 'PathItem') {
-        if (item.filled && boundsContain(item.geometricBounds, pt)) return item.fillColor;
-        return null;
-    }
-    return null;
-}
-
-// Perceived luminance 0..1 of a solid color, or null when it can't be judged
-// (gradient / pattern / no fill) — caller then defaults to a dark label.
-function colorLuminance(color) {
-    var tn = color.typename, r, g, b;
-    if (tn === 'RGBColor')  { return (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255; }
-    if (tn === 'GrayColor') { return 1 - (color.gray / 100); } // gray is a 0..100 tint, 100 = black
-    if (tn === 'CMYKColor') {
-        var k = color.black / 100;
-        r = 255 * (1 - color.cyan / 100)    * (1 - k);
-        g = 255 * (1 - color.magenta / 100) * (1 - k);
-        b = 255 * (1 - color.yellow / 100)  * (1 - k);
-        return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    }
-    if (tn === 'SpotColor') { try { return colorLuminance(color.spot.color); } catch (e) { return null; } }
-    return null;
-}
-
 // Black or white in the document's color space.
 function blackOrWhite(doc, white) {
     if (doc.documentColorSpace === DocumentColorSpace.RGB) {
@@ -340,40 +295,51 @@ function blackOrWhite(doc, white) {
     var k = new CMYKColor(); k.cyan = 0; k.magenta = 0; k.yellow = 0; k.black = white ? 0 : 100; return k;
 }
 
-// Scale the SIZE label to SIZE_GLYPH_HEIGHT and place its glyph bottom SIZE_BOTTOM_GAP
-// above the design's bottom edge, centered horizontally within the shape, then tuck it
-// in front of the design.
-function placeSizeLabel(label, maskShape, designCopy, doc) {
+// Scale a SIZE label so its visible glyphs are exactly SIZE_GLYPH_HEIGHT tall.
+function scaleSizeLabel(label) {
     var gb     = glyphBounds(label);
     var glyphH = gb[1] - gb[3];
     if (glyphH > 0) {
         var s = (SIZE_GLYPH_HEIGHT / glyphH) * 100;
         label.resize(s, s, true, true, true, true, true, Transformation.CENTER);
     }
+}
 
-    var maskBottom = maskShape.position[1] - maskShape.height;
-    var newY = label.position[1] + (maskBottom + SIZE_BOTTOM_GAP - glyphBounds(label)[3]);
+// Move a label so its visible glyphs' left edge lands at glyphLeftX and their bottom at
+// glyphBottomY. Computed from glyphBounds (true ink), not the text frame's box.
+function placeLabelGlyphs(label, glyphLeftX, glyphBottomY) {
+    var gx   = glyphBounds(label);
+    var newX = label.position[0] + (glyphLeftX   - gx[0]);
+    var newY = label.position[1] + (glyphBottomY - gx[3]);
+    label.position = [newX, newY];
+}
+
+// Visible glyph width of a label.
+function glyphWidth(label) {
+    var gx = glyphBounds(label);
+    return gx[2] - gx[0];
+}
+
+function placeSizeLabel(sizeName, maskShape, designCopy, doc, parkLayer) {
+    var label = makeSizeLabel(sizeName, parkLayer);
+    scaleSizeLabel(label);
+
+    var maskBottom   = maskShape.position[1] - maskShape.height;
+    var glyphBottomY = maskBottom + SIZE_BOTTOM_GAP;
 
     // The bottom of a piece (a sleeve especially) can be narrower than its bounding box,
     // so center on the shape's ACTUAL span at the label's height, not the box center.
     var segs = [], paths = collectPaths(maskShape);
     for (var i = 0; i < paths.length; i++) flattenSegments(paths[i], 24, segs);
-    var span      = spanAtY(segs, maskBottom + SIZE_BOTTOM_GAP + SIZE_GLYPH_HEIGHT / 2);
-    var centerX   = span ? (span.left + span.right) / 2
-                         : maskShape.position[0] + maskShape.width / 2;
+    var span    = spanAtY(segs, maskBottom + SIZE_BOTTOM_GAP + SIZE_GLYPH_HEIGHT / 2);
+    var centerX = span ? (span.left + span.right) / 2
+                       : maskShape.position[0] + maskShape.width / 2;
 
-    var gx        = glyphBounds(label);
-    var glyphMidX = (gx[0] + gx[2]) / 2;
-    var newX      = label.position[0] + (centerX - glyphMidX);
-    label.position = [newX, newY];
+    placeLabelGlyphs(label, centerX - glyphWidth(label) / 2, glyphBottomY);
 
-    // Contrasting fill so the label reads over the design: sample the frontmost solid
-    // fill under the label centre (the label isn't in the design yet, so it can't match
-    // itself); dark background -> white text, light/unknown -> black text.
-    var lb     = label.geometricBounds;
-    var under  = fillColorAtPoint(designCopy, [(lb[0] + lb[2]) / 2, (lb[1] + lb[3]) / 2]);
-    var lum    = under ? colorLuminance(under) : null;
-    label.textRange.characterAttributes.fillColor = blackOrWhite(doc, lum !== null && lum < 0.5);
+    var ca = label.textRange.characterAttributes;
+    ca.fillColor     = blackOrWhite(doc, true);
+    ca.strokeWeight = SIZE_STROKE_WEIGHT;
 
     label.move(designCopy, ElementPlacement.PLACEBEFORE);
 }
@@ -549,8 +515,9 @@ function main() {
         clipPath.move(clipGroup, ElementPlacement.PLACEATBEGINNING);
         clipGroup.clipped = true;
 
-        // Create the SIZE label and place it relative to the masked design.
-        placeSizeLabel(makeSizeLabel(sizeName, outputLayer), maskShape, designCopy, outDoc);
+        // Create the SIZE label (white glyphs, black outline) and place it relative to
+        // the masked design.
+        placeSizeLabel(sizeName, maskShape, designCopy, outDoc, outputLayer);
 
         var outlineShape = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         outlineShape.name = instanceName + '_OUTLINE';
