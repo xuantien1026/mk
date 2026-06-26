@@ -472,19 +472,11 @@ function main() {
                 + '(thường do còn sót một đối tượng rỗng trùng tên).');
         }
 
-        // resize() corrupts the character stroke weight of point text (it collapses to
-        // ~1/100 of its value), wiping the visible border on labels like SO. Snapshot
-        // each stroked text frame's weight now so we can restore it after the resize.
-        var strokedText = collectStrokedTextFrames(designCopy);
-
-        designCopy.resize(scaleX, scaleY, true, true, true, true, true, Transformation.CENTER);
-
-        // Restore each glyph border, scaled to match the new font size (the vertical
-        // scale, which drives glyph height), so the border stays proportional.
-        for (var ti = 0; ti < strokedText.length; ti++) {
-            strokedText[ti].frame.textRange.characterAttributes.strokeWeight =
-                strokedText[ti].weight * (scaleY / 100);
-        }
+        // Don't scale stroke widths (changeLineWidths = false): resize() collapses the
+        // strokes of point text to ~1/100 of their weight, wiping the visible border on
+        // labels like SO — including Appearance-panel strokes, which the DOM can't read
+        // back to restore. Leaving stroke widths untouched keeps those borders intact.
+        designCopy.resize(scaleX, scaleY, true, true, true, true, false, Transformation.CENTER);
 
         // The independent scale distorts every LOGO inside the design. Restore each
         // logo's aspect ratio: it was just scaled by scaleX horizontally and scaleY

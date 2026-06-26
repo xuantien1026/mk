@@ -15,29 +15,3 @@ function findAllItemsByName(container, name, results) {
     }
     return results;
 }
-
-// Collect every TextFrame anywhere inside `container` (recursing into groups) whose
-// glyphs carry a stroke (a "border", e.g. the SO number). Returns an array of
-// { frame, weight } capturing each one's current character stroke weight.
-//
-// Why this exists: Illustrator's resize() corrupts the character stroke weight of
-// point text — it collapses to ~1/100 of its value, wiping out the visible border —
-// so callers snapshot the weight before resizing and restore it afterward.
-function collectStrokedTextFrames(container, results) {
-    if (!results) results = [];
-    if (!container.pageItems) return results;
-    for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        if (item.typename === 'TextFrame') {
-            try {
-                var ca = item.textRange.characterAttributes;
-                if (ca.strokeColor && ca.strokeColor.typename !== 'NoColor') {
-                    results.push({ frame: item, weight: ca.strokeWeight });
-                }
-            } catch (e) {}
-        } else if (item.typename === 'GroupItem') {
-            collectStrokedTextFrames(item, results);
-        }
-    }
-    return results;
-}

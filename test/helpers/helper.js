@@ -56,21 +56,6 @@ function makeUtilsEnv() {
     return context;
 }
 
-// Build a fake TextFrame page item. strokeColorType 'NoColor' models an unstroked
-// glyph; any other value (e.g. 'CMYKColor') models a visible border.
-function textFrame(name, strokeWeight, strokeColorType) {
-    return {
-        name:     name,
-        typename: 'TextFrame',
-        textRange: {
-            characterAttributes: {
-                strokeColor:  { typename: strokeColorType || 'NoColor' },
-                strokeWeight: strokeWeight
-            }
-        }
-    };
-}
-
 // Build a fake GroupItem wrapping child page items.
 function groupItem(name, children) {
     return { name: name, typename: 'GroupItem', pageItems: children };
@@ -81,4 +66,4 @@ function container(children) {
     return { pageItems: children };
 }
 
-module.exports = { makeEnv, makeDoc, makePrintEnv, makeUtilsEnv, textFrame, groupItem, container };
+module.exports = { makeEnv, makeDoc, makePrintEnv, makeUtilsEnv, groupItem, container };
