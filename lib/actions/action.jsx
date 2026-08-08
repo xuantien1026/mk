@@ -14,16 +14,21 @@
 //
 // Why a template of a RECORDED action rather than an action built from scratch:
 // hand-authored .aia files load fine but their steps play as "not currently
-// available". Only genuinely recorded actions replay reliably. template.aia
-// is a byte-for-byte copy of a real recording (ref.aia) with only the values
-// swapped for {{PLACEHOLDERS}}, so what gets loaded is still the real thing.
+// available". Only genuinely recorded actions replay reliably. scale.aia and
+// move.aia are byte-for-byte copies of the two steps of a real recording
+// (ref.aia) with only the values swapped for {{PLACEHOLDERS}}, so what gets
+// loaded is still the real thing.
 //
 // Placeholders and the .aia parameter each one fills:
 //
-//   {{SET_NAME}}        set name          (hex name field, length-prefixed)
-//   {{ACTION_NAME}}     action name       (hex name field, length-prefixed)
+// The set holds TWO independent actions, so a scale and a move can be played
+// separately rather than always firing as one two-step action:
 //
-//   Scale step (adobe_scale):
+//   {{SET_NAME}}           set name             (hex name field, length-prefixed)
+//   {{SCALE_ACTION_NAME}}  action 1 — Scale only
+//   {{MOVE_ACTION_NAME}}   action 2 — Move only
+//
+//   Scale action (adobe_scale):
 //   {{SCALE_UNIFORM}}   unfm  boolean     1 = uniform, 0 = non-uniform
 //   {{SCALE_STROKES}}   line  boolean     1 = scale strokes & effects
 //   {{SCALE_H}}         hozn  percent     horizontal scale
@@ -32,7 +37,7 @@
 //   {{SCALE_ORIGIN_X}}  detX  points      transform origin
 //   {{SCALE_ORIGIN_Y}}  detY  points
 //
-//   Move step (adobe_move):
+//   Move action (adobe_move):
 //   {{MOVE_H}}          hozn  points      horizontal distance
 //   {{MOVE_V}}          vtcl  points      vertical distance (+V = up)
 //   {{MOVE_COPY}}       copy  boolean
@@ -42,9 +47,18 @@
 // so the two are kept apart by position.
 
 var Action = (function () {
-    // $.fileName under #include is THIS file, so paths here are relative to
-    // lib/actions/ — where template.aia sits.
-    var TEMPLATE = File(File($.fileName).parent + '/template.aia');
+    var TEMPLATES = {
+        scale: {
+            file:       File(File($.fileName).parent + '/scale.aia'),
+            setName:    'MKSCALESET',
+            actionName: 'SCALE'
+        },
+        move: {
+            file:       File(File($.fileName).parent + '/move.aia'),
+            setName:    'MKMOVESET',
+            actionName: 'MOVE'
+        }
+    };
 
     var TEMP_DIR  = null;   // File(File($.fileName).parent.parent.parent + '/build'); 
     var KEEP_FILE = false;
@@ -90,8 +104,8 @@ var Action = (function () {
     // nothing. Callers override only the fields they care about.
     function actionDefaults() {
         return {
-            setName:      'MKSET',
-            actionName:   'MKACTION',
+            setName:      null,   // filled from the template's own defaults
+            actionName:   null,
             scaleUniform: false,
             scaleStrokes: false,
             scaleH:       100,
@@ -148,26 +162,40 @@ var Action = (function () {
         return out;
     }
 
-    // Read the template, fill it from `params`, and return the .aia source.
-    function buildActionText(params) {
-        // open() returns false on a missing file rather than throwing, which
-        // would silently yield an empty .aia — check first.
-        if (!TEMPLATE.exists) {
-            throw new Error('Không tìm thấy file template:\n' + TEMPLATE.fsName);
-        }
-        TEMPLATE.open('r');
-        var text = TEMPLATE.read();
-        TEMPLATE.close();
-        return fillTemplate(text, params);
+    // Resolve a kind ('scale' | 'move') to its template, applying that
+    // template's own set/action names unless the caller named them.
+    function resolve(kind, params) {
+        var t = TEMPLATES[kind];
+        if (!t) throw new Error('Loại action không hợp lệ: ' + kind);
+
+        var p = withDefaults(params);
+        if (!p.setName)    p.setName    = t.setName;
+        if (!p.actionName) p.actionName = t.actionName;
+        p.template = t.file;
+        return p;
     }
 
-    // Build an action from the template and load it into Illustrator. Returns
-    // the resolved params so the caller knows the set/action names to play.
-    function createAction(params) {
-        var p = withDefaults(params);
-        var text = buildActionText(p);
+    // Read a kind's template, fill it from `params`, and return the .aia source.
+    function buildActionText(kind, params) {
+        var p = resolve(kind, params);
+        // open() returns false on a missing file rather than throwing, which
+        // would silently yield an empty .aia — check first.
+        if (!p.template.exists) {
+            throw new Error('Không tìm thấy file template:\n' + p.template.fsName);
+        }
+        p.template.open('r');
+        var text = p.template.read();
+        p.template.close();
+        return fillTemplate(text, p);
+    }
 
-        var out = File(outputFolder() + '/' + p.setName + '_' + p.actionName + '.aia');
+    // Build an action of `kind` and load it into Illustrator. Returns the
+    // resolved params so the caller knows the set/action names to play.
+    function createAction(kind, params) {
+        var p = resolve(kind, params);
+        var text = buildActionText(kind, p);
+
+        var out = File(outputFolder() + '/' + p.setName + '.aia');
         out.encoding = 'UTF-8';
         out.open('w');
         out.write(text);
@@ -187,8 +215,9 @@ var Action = (function () {
     // ---------------------------------------------------------------- api
 
     return {
-        create:    createAction,
-        buildText: buildActionText,
-        defaults:  actionDefaults
+        createScale: function (params) { return createAction('scale', params); },
+        createMove:  function (params) { return createAction('move',  params); },
+        buildText:   buildActionText,
+        defaults:    actionDefaults
     };
 })();

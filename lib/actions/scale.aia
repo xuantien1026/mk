@@ -7,7 +7,7 @@
 	/keyIndex 0
 	/colorIndex 0
 	/isOpen 1
-	/eventCount 2
+	/eventCount 1
 	/event-1 {
 		/useRulersIn1stQuadrant 0
 		/internalName (adobe_scale)
@@ -64,38 +64,6 @@
 			/type (unit real)
 			/value {{SCALE_ORIGIN_Y}}
 			/unit 592476268
-		}
-	}
-	/event-2 {
-		/useRulersIn1stQuadrant 0
-		/internalName (adobe_move)
-		/localizedName [ 4
-			4d6f7665
-		]
-		/isOpen 0
-		/isOn 1
-		/hasDialog 1
-		/showDialog 0
-		/parameterCount 3
-		/parameter-1 {
-			/key 1752136302
-			/showInPalette -1
-			/type (unit real)
-			/value {{MOVE_H}}
-			/unit 592476268
-		}
-		/parameter-2 {
-			/key 1987339116
-			/showInPalette -1
-			/type (unit real)
-			/value {{MOVE_V}}
-			/unit 592476268
-		}
-		/parameter-3 {
-			/key 1668247673
-			/showInPalette -1
-			/type (boolean)
-			/value {{MOVE_COPY}}
 		}
 	}
 }
