@@ -445,17 +445,21 @@ function main() {
         rightPant2  = requireItem(mainDoc.pageItems, QUAN_PHAI2, mainDoc.name);
     }
 
+    // Convention: the last element of every design group is its bounding path (a normal
+    // path or a clip path) defining the intended fit extent. Measure that, not the whole
+    // group — so artwork that overflows the bounds (side bleed, stray elements) doesn't
+    // distort the scale.
+    function boundingPathOf(item) {
+        return (item.typename === 'GroupItem' && item.pageItems.length > 0)
+            ? item.pageItems[item.pageItems.length - 1]
+            : item;
+    }
+
     function resizeAndMask(design, maskShape, instanceName, sizeName) {
         var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         designCopy.name = instanceName + '_DESIGN';
 
-        // Convention: the last element of every design group is its bounding path
-        // (a normal path or a clip path) defining the intended fit extent. Measure that,
-        // not the whole group — so artwork that overflows the bounds (side bleed, stray
-        // elements) doesn't distort the scale.
-        var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.pageItems.length > 0)
-            ? designCopy.pageItems[designCopy.pageItems.length - 1]
-            : designCopy;
+        var boundingPath = boundingPathOf(designCopy);
 
         var preBounds = boundingPath.geometricBounds;
         var visibleW  = preBounds[2] - preBounds[0];
@@ -482,20 +486,8 @@ function main() {
                 + '(thường do còn sót một đối tượng rỗng trùng tên).');
         }
 
-        // Scaled through an Action rather than designCopy.resize(): the DOM cannot
-        // transform opacity masks, so a DOM resize strands the FADED fade at its
-        // original size and position. Transform.scale leaves stroke widths alone
-        // (as changeLineWidths = false did), because scaling them collapses the
-        // strokes of point text to ~1/100 of their weight, wiping the visible border
-        // on labels like SO — including Appearance-panel strokes, which the DOM can't
-        // read back to restore.
-        //
-        // The action detaches every reference into the group, so designCopy is
-        // replaced by the live one it returns and boundingPath re-derived from it.
-        designCopy = Transform.scale(outDoc, designCopy, scaleX, scaleY);
-        boundingPath = (designCopy.typename === 'GroupItem' && designCopy.pageItems.length > 0)
-            ? designCopy.pageItems[designCopy.pageItems.length - 1]
-            : designCopy;
+        designCopy   = Transform.scale(outDoc, designCopy, scaleX, scaleY);
+        boundingPath = boundingPathOf(designCopy);
 
         // The independent scale distorts every LOGO inside the design. Restore each
         // logo's aspect ratio: it was just scaled by scaleX horizontally and scaleY
