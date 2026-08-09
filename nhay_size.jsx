@@ -3,6 +3,7 @@
 #include "lib/config.jsx"
 #include "lib/utils.jsx"
 #include "lib/validate.jsx"
+#include "lib/actions/transform.jsx"
 
 var PT_PER_MM = 2.83465;
 
@@ -354,6 +355,15 @@ function main() {
     var mainDoc = app.activeDocument;
     validateDocument(mainDoc);
 
+    // Clear the selection in the design file before anything is duplicated.
+    // A duplicate inherits the source item's selected state, and a live selection
+    // in the design document then blocks selecting that copy in the output document
+    // — `.selected = true` silently does nothing and the Action plays against an
+    // empty selection ("the object 'Scale' is not currently available"). Whichever
+    // part the user happened to have clicked before running is the one that fails,
+    // which is what made this look intermittent.
+    deselectAllDocuments();
+
     var options   = selectOptions();
     var sourceDoc = app.open(options.file);
 
@@ -435,17 +445,21 @@ function main() {
         rightPant2  = requireItem(mainDoc.pageItems, QUAN_PHAI2, mainDoc.name);
     }
 
+    // Convention: the last element of every design group is its bounding path (a normal
+    // path or a clip path) defining the intended fit extent. Measure that, not the whole
+    // group — so artwork that overflows the bounds (side bleed, stray elements) doesn't
+    // distort the scale.
+    function boundingPathOf(item) {
+        return (item.typename === 'GroupItem' && item.pageItems.length > 0)
+            ? item.pageItems[item.pageItems.length - 1]
+            : item;
+    }
+
     function resizeAndMask(design, maskShape, instanceName, sizeName) {
         var designCopy = design.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         designCopy.name = instanceName + '_DESIGN';
 
-        // Convention: the last element of every design group is its bounding path
-        // (a normal path or a clip path) defining the intended fit extent. Measure that,
-        // not the whole group — so artwork that overflows the bounds (side bleed, stray
-        // elements) doesn't distort the scale.
-        var boundingPath = (designCopy.typename === 'GroupItem' && designCopy.pageItems.length > 0)
-            ? designCopy.pageItems[designCopy.pageItems.length - 1]
-            : designCopy;
+        var boundingPath = boundingPathOf(designCopy);
 
         var preBounds = boundingPath.geometricBounds;
         var visibleW  = preBounds[2] - preBounds[0];
@@ -472,16 +486,14 @@ function main() {
                 + '(thường do còn sót một đối tượng rỗng trùng tên).');
         }
 
-        // Don't scale stroke widths (changeLineWidths = false): resize() collapses the
-        // strokes of point text to ~1/100 of their weight, wiping the visible border on
-        // labels like SO — including Appearance-panel strokes, which the DOM can't read
-        // back to restore. Leaving stroke widths untouched keeps those borders intact.
-        designCopy.resize(scaleX, scaleY, true, true, true, true, false, Transformation.CENTER);
+        designCopy   = Transform.scale(outDoc, designCopy, scaleX, scaleY);
+        boundingPath = boundingPathOf(designCopy);
 
         // The independent scale distorts every LOGO inside the design. Restore each
         // logo's aspect ratio: it was just scaled by scaleX horizontally and scaleY
         // vertically, so correcting its height by scaleX/scaleY makes its net scale
         // uniform at scaleX. Resize about each logo's own center so it stays put.
+        // The logos carry no mask of their own, so a DOM resize is fine here.
         var logoHeightCorrection = (scaleX / scaleY) * 100;
         var logos = findAllItemsByName(designCopy, LOGO);
         for (var li = 0; li < logos.length; li++) {
@@ -494,10 +506,10 @@ function main() {
         var visCenterY  = (postBounds[1] + postBounds[3]) / 2;
         var maskCenterX = maskShape.position[0] + maskShape.width  / 2;
         var maskCenterY = maskShape.position[1] - maskShape.height / 2;
-        designCopy.position = [
-            designCopy.position[0] + (maskCenterX - visCenterX),
-            designCopy.position[1] + (maskCenterY - visCenterY)
-        ];
+        // Action-driven for the same reason as the scale — `.position =` would leave
+        // the opacity mask behind. Reassign: the old reference is dead after this.
+        designCopy = Transform.move(outDoc, designCopy,
+            maskCenterX - visCenterX, maskCenterY - visCenterY);
 
         var clipPath  = maskShape.duplicate(outputLayer, ElementPlacement.PLACEATEND);
         var clipGroup = outputLayer.groupItems.add();
@@ -542,7 +554,9 @@ function main() {
         var vb = visBounds(group);
         var deltaX = newX - vb.left;
         var deltaY = newY - vb.top;
-        group.position = [group.position[0] + deltaX, group.position[1] + deltaY];
+
+        Transform.move(outDoc, group, deltaX, deltaY);
+
         var outline = outDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
@@ -550,11 +564,24 @@ function main() {
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var spacing    = 3 * PT_PER_MM;       // 3mm gap between adjacent designs
     var padding    = spacing / 2;         // row margin: gap between rows/sizes = 2*padding = 3mm
-    // Anchor the output to the top edge of the output artboard so the vertical stack
+    
+    // Anchor the output near the top edge of the output artboard so the vertical stack
     // has maximum room before hitting Illustrator's pasteboard coordinate limit (the
     // point where geometry gets clamped, which corrupts the lower sizes).
+    //
+    // TOP_MARGIN keeps the first row off the very edge. The artboard is 575cm, near
+    // Illustrator's maximum, so the ~227in canvas extends barely beyond it. Layout
+    // positions parts by their OUTLINE, but a design overflows its clip shape with
+    // artwork the mask hides and Illustrator still counts when checking a transform:
+    // THAN_SAU is 2262pt of design inside a 1941pt shape, ~160pt of it above the
+    // outline. Flush at the top that overflow lands past the ceiling and the Action
+    // move is refused with "would move the object off the drawing area" — confirmed
+    // by removing this and watching THAN_SAU fail again. The old DOM `.position =`
+    // never ran that check, which is why it only appeared once transforms became
+    // Actions. Left needs no inset: no left-edge refusal has ever been observed.
+    var TOP_MARGIN = 100 * PT_PER_MM;   // ~283pt; the measured need is ~160pt
     var bgLeft     = outDoc.artboards[0].artboardRect[0];
-    var bgTop      = outDoc.artboards[0].artboardRect[1];
+    var bgTop      = outDoc.artboards[0].artboardRect[1] - TOP_MARGIN;
     var currentTop = bgTop;
 
     for (var s = 0; s < options.sizes.length; s++) {
@@ -669,6 +696,8 @@ function run() {
     } catch (e) {
         if (e instanceof CancelledError) return; // user cancelled — end silently
         alert('Error: ' + e.message + '\nLine: ' + e.line);
+    } finally {
+        Transform.cleanup();
     }
 }
 
