@@ -563,24 +563,16 @@ function main() {
         var deltaX = newX - vb.left;
         var deltaY = newY - vb.top;
 
-        // Read the outline's name BEFORE the action: Transform.move detaches the
-        // reference it is given, so `group` must not be touched afterwards.
-        var outlineName = group.name.replace('_FINAL', '_OUTLINE');
-
-        // The _FINAL group holds the masked design, so it moves through an Action —
-        // `.position =` would leave the opacity mask behind. The returned reference
-        // is the live one; the caller's `group` is dead from here on.
         Transform.move(outDoc, group, deltaX, deltaY);
 
-        // The _OUTLINE is a plain stroked path with no mask, so a DOM move is fine
-        // (and much faster).
-        var outline = outDoc.pageItems.getByName(outlineName);
+        var outline = outDoc.pageItems.getByName(group.name.replace('_FINAL', '_OUTLINE'));
         outline.position = [outline.position[0] + deltaX, outline.position[1] + deltaY];
     }
 
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var spacing    = 3 * PT_PER_MM;       // 3mm gap between adjacent designs
     var padding    = spacing / 2;         // row margin: gap between rows/sizes = 2*padding = 3mm
+    
     // Anchor the output near the top edge of the output artboard so the vertical stack
     // has maximum room before hitting Illustrator's pasteboard coordinate limit (the
     // point where geometry gets clamped, which corrupts the lower sizes).
