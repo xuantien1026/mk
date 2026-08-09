@@ -585,18 +585,19 @@ function main() {
     // has maximum room before hitting Illustrator's pasteboard coordinate limit (the
     // point where geometry gets clamped, which corrupts the lower sizes).
     //
-    // Inset by CANVAS_MARGIN rather than sitting flush. The artboard is 575cm, near
-    // Illustrator's maximum, so the ~227in canvas leaves almost nothing outside it.
-    // Layout positions parts by their OUTLINE, but a design overflows its clip shape
-    // with artwork the mask hides and Illustrator still counts: THAN_SAU is 2262pt of
-    // design inside a 1941pt shape, ~160pt of it above the outline. Flush at the top
-    // that overflow lands at y≈16449 and the Action move is refused — measured against
-    // a sleeve that succeeded at 16344, so the ceiling sits just above that. The old
-    // DOM `.position =` never ran this check, which is why it only appeared once the
-    // transforms moved to Actions.
-    var CANVAS_MARGIN = 100 * PT_PER_MM;   // 100mm ≈ 283pt, comfortably over the ~160pt
-    var bgLeft     = outDoc.artboards[0].artboardRect[0] + CANVAS_MARGIN;
-    var bgTop      = outDoc.artboards[0].artboardRect[1] - CANVAS_MARGIN;
+    // TOP_MARGIN keeps the first row off the very edge. The artboard is 575cm, near
+    // Illustrator's maximum, so the ~227in canvas extends barely beyond it. Layout
+    // positions parts by their OUTLINE, but a design overflows its clip shape with
+    // artwork the mask hides and Illustrator still counts when checking a transform:
+    // THAN_SAU is 2262pt of design inside a 1941pt shape, ~160pt of it above the
+    // outline. Flush at the top that overflow lands past the ceiling and the Action
+    // move is refused with "would move the object off the drawing area" — confirmed
+    // by removing this and watching THAN_SAU fail again. The old DOM `.position =`
+    // never ran that check, which is why it only appeared once transforms became
+    // Actions. Left needs no inset: no left-edge refusal has ever been observed.
+    var TOP_MARGIN = 100 * PT_PER_MM;   // ~283pt; the measured need is ~160pt
+    var bgLeft     = outDoc.artboards[0].artboardRect[0];
+    var bgTop      = outDoc.artboards[0].artboardRect[1] - TOP_MARGIN;
     var currentTop = bgTop;
 
     for (var s = 0; s < options.sizes.length; s++) {
