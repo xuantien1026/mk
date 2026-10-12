@@ -144,15 +144,8 @@ test('distinctVariant includes the blank group when blanks mix with values', fun
     assert.ok(d.indexOf('') !== -1, 'blank should be one of the distinct values');
 });
 
-// Mirror the filter main() applies once a Mẫu is chosen.
-function filterByVariant(orders, chosen) {
-    const out = [];
-    for (let i = 0; i < orders.length; i++) if (orders[i].variant === chosen) out.push(orders[i]);
-    return out;
-}
-
 test('filtering by a chosen value keeps exactly the matching rows', function () {
-    const { parseOrders } = makePrintEnv();
+    const { parseOrders, filterByVariant } = makePrintEnv();
     const orders = parseOrders(csv([
         ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'A'],
@@ -161,11 +154,11 @@ test('filtering by a chosen value keeps exactly the matching rows', function () 
     ]));
     const kept = filterByVariant(orders, 'A');
     assert.equal(kept.length, 2);
-    assert.deepEqual(kept.map(function (o) { return o.number; }), ['1', '3']);
+    assert.deepEqual(Array.from(kept).map(function (o) { return o.number; }), ['1', '3']);
 });
 
 test('filtering by the blank group keeps exactly the blank-variant rows', function () {
-    const { parseOrders } = makePrintEnv();
+    const { parseOrders, filterByVariant } = makePrintEnv();
     const orders = parseOrders(csv([
         ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'A'],
@@ -174,5 +167,20 @@ test('filtering by the blank group keeps exactly the blank-variant rows', functi
     ]));
     const kept = filterByVariant(orders, '');
     assert.equal(kept.length, 2);
-    assert.deepEqual(kept.map(function (o) { return o.number; }), ['2', '3']);
+    assert.deepEqual(Array.from(kept).map(function (o) { return o.number; }), ['2', '3']);
+});
+
+test('groupOrdersBySize groups in order and drops sizes that were not prepared', function () {
+    const { parseOrders, groupOrdersBySize } = makePrintEnv();
+    const orders = parseOrders(csv([
+        ['SIZE', 'SỐ'],
+        ['m', '1'],
+        ['l', '2'],
+        ['m', '3'],
+        ['xl', '4']
+    ]));
+    const bySize = groupOrdersBySize(orders, ['M', 'L']);
+    assert.deepEqual(Object.keys(bySize).sort(), ['L', 'M']);
+    assert.deepEqual(Array.from(bySize.M).map(function (o) { return o.number; }), ['1', '3']);
+    assert.equal(bySize.XL, undefined);
 });

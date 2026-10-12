@@ -15,3 +15,12 @@ function findAllItemsByName(container, name, results) {
     }
     return results;
 }
+
+// getByName that throws a readable error naming the missing item and its file.
+function requireItem(collection, name, fileName) {
+    try {
+        return collection.getByName(name);
+    } catch (e) {
+        throw new Error('Khong tim thay "' + name + '" trong file ' + fileName);
+    }
+}

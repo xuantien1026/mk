@@ -105,3 +105,22 @@ function distinctVariant(orders) {
     }
     return seen;
 }
+
+// Keep only the orders of the chosen variant (Mẫu).
+function filterByVariant(orders, chosen) {
+    var out = [];
+    for (var i = 0; i < orders.length; i++) if (orders[i].variant === chosen) out.push(orders[i]);
+    return out;
+}
+
+// Group orders by size ({ size: [orders] }), dropping any size not in sizes.
+function groupOrdersBySize(orders, sizes) {
+    var bySize = {};
+    for (var i = 0; i < orders.length; i++) {
+        var o = orders[i];
+        if (!contains(sizes, o.size)) continue;
+        if (!bySize[o.size]) bySize[o.size] = [];
+        bySize[o.size].push(o);
+    }
+    return bySize;
+}
