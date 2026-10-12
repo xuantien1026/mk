@@ -4,8 +4,6 @@
 #include "lib/utils.jsx"
 #include "lib/validate.jsx"
 
-var PT_PER_MM = 2.83465;
-
 // Thrown when the user cancels a dialog — the outer catch ends the script silently.
 function CancelledError() {
     this.name    = 'CancelledError';
@@ -181,14 +179,6 @@ function selectOptions() {
 // -------------------------------------------------------
 // Helpers
 // -------------------------------------------------------
-function requireItem(collection, name, fileName) {
-    try {
-        return collection.getByName(name);
-    } catch (e) {
-        throw new Error('Khong tim thay "' + name + '" trong file ' + fileName);
-    }
-}
-
 // Existence check via the native getByName (fast, C-level) — do NOT use the scripted
 // findAllItemsByName for this: it walks the whole document tree in interpreted code.
 function hasItem(collection, name) {
