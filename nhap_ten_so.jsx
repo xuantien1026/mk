@@ -95,7 +95,7 @@ function main() {
     // -------------------------------------------------------
     var KINDS  = [{ kind: 'SHIRT', label: 'Áo' }, { kind: 'PANT', label: 'Quần' }];
     var packer = createSheetPacker();
-    var placements = []; // { sheet, offset, kind, sz, sides, prefix, name, number }
+    var placements = []; // { sheet, offset, kind, sz, sides, prefix, order }
     for (var s = 0; s < preparedSizes.length; s++) {
         var sz   = preparedSizes[s];
         var list = orders[sz];
@@ -108,7 +108,7 @@ function main() {
             for (var q = 0; q < list.length; q++) {
                 var slot = packer.place(block.height);
                 placements.push({ sheet: slot.sheet, offset: slot.offset, kind: KINDS[t].kind, sz: sz, sides: sides,
-                                  prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number });
+                                  prefix: sz + '_' + (q + 1), order: list[q] });
             }
         }
     }
@@ -147,13 +147,15 @@ function main() {
         var outLayer = doc.layers.add();
         outLayer.name = 'PRINT_OUTPUT';
 
-        function dupPart(sz, side, instanceName, name, number) {
+        // Duplicate one master part for an order and fill in its texts.
+        function dupPart(sz, side, instanceName, order) {
             var m = masters[sz + '_' + side];
             var g = m.design.duplicate(outLayer, ElementPlacement.PLACEATEND);  g.name = instanceName + '_FINAL';
             var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
-            var maxW = CUSTOMER_NAME_MAX_WIDTH[sz];
-            applyField(g, TEN, name,   maxW ? u(maxW) : null);
-            applyField(g, SO,  number, null);
+            var maxW = CUSTOMER_NAME_MAX_WIDTH[sz] ? u(CUSTOMER_NAME_MAX_WIDTH[sz]) : null;
+            applyField(g, TEN_TREN, order.nameAbove, maxW);
+            applyField(g, TEN_DUOI, order.nameBelow, maxW);
+            applyField(g, SO,       order.number,    null);
 
             // Keep each part-instance's _OUTLINE and _FINAL together as a single group,
             // the same way Step 1 does, so they read as one unit in the print output.
@@ -172,7 +174,7 @@ function main() {
         function buildProduct(p) {
             var parts = [], boxes = [];
             for (var i = 0; i < p.sides.length; i++) {
-                parts.push(dupPart(p.sz, p.sides[i], p.prefix + '_' + p.sides[i], p.name, p.number));
+                parts.push(dupPart(p.sz, p.sides[i], p.prefix + '_' + p.sides[i], p.order));
                 boxes.push(partBounds(parts[i]));
             }
             var bb = unionBounds(boxes);

@@ -7,18 +7,18 @@ function csv(rows) {
     return rows.map(function (r) { return r.join(','); }).join('\n');
 }
 
-test('parseOrders builds {size, number, name, variant} from a full header', function () {
+test('parseOrders builds {size, number, nameAbove, nameBelow, variant} from a full header', function () {
     const { parseOrders } = makePrintEnv();
     const text = csv([
-        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ', 'MẪU'],
-        ['m', '10', 'Alice', 'Design A'],
-        ['l', '11', 'Bob',   'Design B']
+        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ', 'TÊN DƯỚI SỐ', 'MẪU'],
+        ['m', '10', 'Alice', 'Smith', 'Design A'],
+        ['l', '11', 'Bob',   'Jones', 'Design B']
     ]);
     const orders = parseOrders(text);
     assert.equal(orders.length, 2);
     assert.deepEqual(
-        { size: orders[0].size, number: orders[0].number, name: orders[0].name, variant: orders[0].variant },
-        { size: 'M', number: '10', name: 'Alice', variant: 'Design A' }
+        { size: orders[0].size, number: orders[0].number, nameAbove: orders[0].nameAbove, nameBelow: orders[0].nameBelow, variant: orders[0].variant },
+        { size: 'M', number: '10', nameAbove: 'Alice', nameBelow: 'Smith', variant: 'Design A' }
     );
     assert.equal(orders[1].variant, 'Design B');
 });
@@ -34,13 +34,13 @@ test('parseOrders reads the detail table of a production order, skipping the sum
         ['', 'TỔNG SỐ LƯỢNG', '', '2', '', '', '', ''],
         ['DANH SÁCH CHI TIẾT', '', '', '', '', '', '', ''],
         ['STT', 'TÊN TRÊN SỐ', 'SỐ', 'TÊN DƯỚI SỐ', 'SIZE', 'SỐ LƯỢNG', 'FORM', 'MẪU'],
-        ['1', 'A', '1', '', 'M', '', 'NỮ', '1'],
+        ['1', 'A', '1', 'X', 'M', '', 'NỮ', '1'],
         ['2', 'B', '2', '', 'l', '', '', '1']
     ]));
     assert.equal(orders.length, 2);
     assert.deepEqual(
-        { size: orders[0].size, number: orders[0].number, name: orders[0].name, variant: orders[0].variant },
-        { size: 'M', number: '1', name: 'A', variant: '1' }
+        { size: orders[0].size, number: orders[0].number, nameAbove: orders[0].nameAbove, nameBelow: orders[0].nameBelow, variant: orders[0].variant },
+        { size: 'M', number: '1', nameAbove: 'A', nameBelow: 'X', variant: '1' }
     );
     assert.equal(orders[1].size, 'L');
 });
@@ -63,7 +63,8 @@ test('parseOrders leaves optional columns as empty strings when absent', functio
         ['SIZE', 'SỐ'],
         ['m', '7']
     ]));
-    assert.equal(orders[0].name, '');
+    assert.equal(orders[0].nameAbove, '');
+    assert.equal(orders[0].nameBelow, '');
     assert.equal(orders[0].variant, '');
 });
 
@@ -89,7 +90,7 @@ test('parseOrders handles quoted fields with embedded commas and strips BOM', fu
     ]);
     const orders = parseOrders(text);
     assert.equal(orders.length, 1);
-    assert.equal(orders[0].name, 'Doe, John');
+    assert.equal(orders[0].nameAbove, 'Doe, John');
 });
 
 test('parseOrders throws when required columns are missing', function () {
@@ -183,4 +184,16 @@ test('groupOrdersBySize groups in order and drops sizes that were not prepared',
     assert.deepEqual(Object.keys(bySize).sort(), ['L', 'M']);
     assert.deepEqual(Array.from(bySize.M).map(function (o) { return o.number; }), ['1', '3']);
     assert.equal(bySize.XL, undefined);
+});
+
+test('parseOrders matches the Tên dưới số header regardless of accent/case', function () {
+    const { parseOrders } = makePrintEnv();
+    for (const header of ['Tên dưới số', 'TEN DUOI SO', '  tên dưới số ']) {
+        const orders = parseOrders(csv([
+            ['size', 'so', header],
+            ['s', '1', 'Below']
+        ]));
+        assert.equal(orders[0].nameBelow, 'Below', 'header "' + header + '" should match');
+        assert.equal(orders[0].nameAbove, '');
+    }
 });

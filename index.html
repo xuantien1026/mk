@@ -194,8 +194,12 @@
           Dùng cách này <em>hoặc</em> quần 2 mảnh ở trên, không dùng cả hai.</td>
       </tr>
       <tr>
-        <td><code>TEN</code></td>
-        <td>Text frame chứa tên khách hàng (có thể bỏ trống)</td>
+        <td><code>TEN_TREN</code></td>
+        <td>Text frame chứa tên in phía trên số — lấy từ cột <em>Tên trên số</em> (có thể bỏ trống)</td>
+      </tr>
+      <tr>
+        <td><code>TEN_DUOI</code></td>
+        <td>Text frame chứa tên in phía dưới số — lấy từ cột <em>Tên dưới số</em> (có thể bỏ trống)</td>
       </tr>
       <tr>
         <td><code>SO</code></td>
@@ -331,18 +335,27 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
         <td>Có</td>
       </tr>
       <tr>
-        <td><code>Số Áo</code></td>
-        <td>Không</td>
+        <td><code>Số</code></td>
+        <td>Có</td>
       </tr>
       <tr>
-        <td><code>Tên In Trên Áo</code></td>
-        <td>Không</td>
+        <td><code>Tên trên số</code></td>
+        <td>Không — điền vào <code>TEN_TREN</code></td>
+      </tr>
+      <tr>
+        <td><code>Tên dưới số</code></td>
+        <td>Không — điền vào <code>TEN_DUOI</code></td>
+      </tr>
+      <tr>
+        <td><code>Mẫu</code></td>
+        <td>Không — nếu có nhiều mẫu, script hỏi in mẫu nào</td>
       </tr>
     </tbody>
   </table>
 
   <ul>
-    <li>Ô <strong>Tên</strong> hoặc <strong>Số</strong> có thể để trống (không điền vô áo).</li>
+    <li>Ô <strong>Tên trên số</strong>, <strong>Tên dưới số</strong> hoặc <strong>Số</strong> có thể để trống
+      (phần chữ tương ứng bị xóa khỏi áo).</li>
   </ul>
 
 </body>
