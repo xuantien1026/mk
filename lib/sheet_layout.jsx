@@ -6,7 +6,7 @@
 var SHEET_W     = 159 * 10 * PT_PER_MM;
 var SHEET_H     = 500 * 10 * PT_PER_MM;
 var SHEET_GAP   = 100;               // gap between sheets on a page
-var PRODUCT_GAP = 5 * PT_PER_MM;     // 5mm between products / parts in a sheet
+var PRODUCT_GAP = 4 * PT_PER_MM;     // 5mm between products / parts in a sheet
 
 // Sheets per output document, as a grid: SHEETS_PER_ROW across × SHEET_ROWS down.
 // A normal Illustrator canvas (max ~578cm) only holds 3 sheets, so every output document
