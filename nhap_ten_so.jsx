@@ -6,6 +6,25 @@
 
 var PT_PER_MM = 2.83465;
 
+// Print sheet: every artboard is a fixed 159cm × 500cm. Products are stacked top to
+// bottom inside a sheet; when the next one doesn't fit, a new sheet is started.
+// All sizes here are REAL sizes, in points.
+var SHEET_W     = 159 * 10 * PT_PER_MM;
+var SHEET_H     = 500 * 10 * PT_PER_MM;
+var SHEET_GAP   = 100;               // gap between sheets on a page
+var PRODUCT_GAP = 3 * PT_PER_MM;     // 3mm between products stacked in a sheet
+
+// Sheets per output document, as a grid: SHEETS_PER_ROW across × SHEET_ROWS down.
+// A normal Illustrator canvas (max ~578cm) only holds 3 sheets, so every output document
+// is a copy of a Large Canvas template (up to ~57m). 12 sheets ≈ 10m × 10m.
+var SHEETS_PER_ROW = 6;
+var SHEET_ROWS     = 2;
+
+// Blank Large Canvas document: in Illustrator, File ▸ New with a width above 578cm
+// (e.g. 1000cm × 1000cm) — Illustrator switches to Large Canvas automatically — then
+// save it here. Scripts can't create a Large Canvas document themselves.
+var LARGE_CANVAS_TEMPLATE = new File($.fileName).parent.fsName + '/lib/large_canvas.ai';
+
 var CUSTOMER_NAME_MAX_WIDTH = {
     'XS':  28.0 * 10 * PT_PER_MM,
     'S':   29.5 * 10 * PT_PER_MM,
@@ -56,25 +75,6 @@ function detectPreparedSizes() {
 // -------------------------------------------------------
 function selectPrintCommandFile() {
     return File.openDialog('Chọn file lệnh in (CSV)', 'CSV:*.csv,All files:*.*');
-}
-
-// Ask for the printing-area width in metres. Returns the value, or null on cancel.
-function getPrintWidth() {
-    var dlg = new Window('dialog', 'Khổ in');
-    dlg.orientation = 'row';
-    dlg.alignChildren = 'center';
-    dlg.add('statictext', undefined, 'Chiều rộng khổ in (mét):');
-    var input = dlg.add('edittext', undefined, '1.6');
-    input.preferredSize = [60, 22];
-    input.active = true;
-    var btns = dlg.add('group');
-    btns.add('button', undefined, 'OK',     {name: 'ok'});
-    btns.add('button', undefined, 'Cancel', {name: 'cancel'});
-
-    if (dlg.show() !== 1) return null;
-    var v = parseFloat(input.text);
-    if (isNaN(v) || v <= 0) { alert('Chiều rộng không hợp lệ.'); return null; }
-    return v;
 }
 
 // Ask which Mẫu to print when the CSV mixes several. values is the list of raw
@@ -151,9 +151,13 @@ function main() {
         return;
     }
 
-    var printWidth = getPrintWidth();
-    if (printWidth == null) return; // cancelled
-    var artboardWidth = printWidth * 1000 * PT_PER_MM;
+    var template = new File(LARGE_CANVAS_TEMPLATE);
+    if (!template.exists) {
+        alert('Không tìm thấy file mẫu Large Canvas: ' + template.fsName + '\n'
+            + 'Tạo file mới trong Illustrator (File ▸ New) rộng hơn 578cm, ví dụ 1000cm × 1000cm, '
+            + 'rồi lưu vào đường dẫn trên.');
+        return;
+    }
 
     var file = selectPrintCommandFile();
     if (!file) return; // cancelled
@@ -187,17 +191,6 @@ function main() {
 
     var sourceDoc = app.activeDocument; // the Step-1 masters document
 
-    // Each output page is a COPY of the Step-1 document, so its usable area equals the
-    // Step-1 artboard — and duplicating the masters inside a copy is same-document (fast).
-    var srcAB    = sourceDoc.artboards[0].artboardRect; // [left, top, right, bottom]
-    var CANVAS_W = srcAB[2] - srcAB[0];
-    var CANVAS_H = srcAB[1] - srcAB[3];
-
-    if (artboardWidth > CANVAS_W) { alert('Khổ in quá lớn — tối đa khoảng 5.7 mét.'); return; }
-
-    var padding    = 0;     // no margin between the design and its artboard edges
-    var COLUMN_GAP = 100;
-
     // The _OUTLINE is the sibling of the _FINAL clip group inside their instance group.
     function outlineOf(group) {
         var ig = group.parent;
@@ -227,40 +220,55 @@ function main() {
     }
 
     // -------------------------------------------------------
-    // Phase 1: assign every artboard to a page + slot, using the master sizes (no
+    // Phase 1: assign every product to a sheet + slot, using the master sizes (no
     // duplication needed — a duplicate is identical to its master).
     // -------------------------------------------------------
-    // Block height = the parts' own Step-1 extent (union), so the artboard wraps the
-    // layout as Step 1 produced it. Width comes from the user's print-width input.
-    function shirtArtH(sz) {
+    // A product's footprint = its parts' own Step-1 extent (union), so the parts keep
+    // the layout Step 1 produced.
+    function shirtBlock(sz) {
         return unionBounds([
             vbByName(sourceDoc, sz + '_FRONT_FINAL'),
             vbByName(sourceDoc, sz + '_BACK_FINAL'),
             vbByName(sourceDoc, sz + '_LEFT_SLEEVE_FINAL'),
             vbByName(sourceDoc, sz + '_RIGHT_SLEEVE_FINAL')
-        ]).height + padding * 2;
+        ]);
     }
-    function pantArtH(sz) {
+    function pantBlock(sz) {
         var sides = pantSides(sourceDoc, sz), boxes = [];
         for (var i = 0; i < sides.length; i++) boxes.push(vbByName(sourceDoc, sz + '_' + sides[i] + '_FINAL'));
-        return unionBounds(boxes).height + padding * 2;
+        return unionBounds(boxes);
+    }
+    function checkFits(block, label) {
+        var cm = 10 * PT_PER_MM;
+        if (block.width > SHEET_W || block.height > SHEET_H) {
+            throw new Error(label + ' (' + Math.round(block.width / cm) + 'cm × ' + Math.round(block.height / cm)
+                + 'cm) không vừa tấm in 159cm × 500cm.');
+        }
     }
 
-    var placements = []; // { page, kind, sz, prefix, name, number, left, top }
-    var pgCount = 0, curTop, colLeft;
-    function newPage() { pgCount++; curTop = CANVAS_H; colLeft = 0; }
-    function placeSlot(artH) {
-        if (curTop < CANVAS_H && artH > curTop) {                 // column full
-            var nextLeft = colLeft + artboardWidth + COLUMN_GAP;
-            if (nextLeft + artboardWidth > CANVAS_W) newPage();    // page full → new page
-            else { colLeft = nextLeft; curTop = CANVAS_H; }
-        }
-        var slot = { page: pgCount, left: colLeft, top: curTop };
-        curTop -= artH;
+    // Sheets fill a page's grid row by row (SHEETS_PER_ROW × SHEET_ROWS); a full page
+    // starts a new document. Inside a sheet, products stack top to bottom with
+    // PRODUCT_GAP between them. A slot's `offset` is the real distance (pt) from the
+    // sheet top to the product top — page coordinates are only known in Phase 2.
+    var SHEETS_PER_PAGE = SHEETS_PER_ROW * SHEET_ROWS;
+    var placements = []; // { sheet, kind, sz, prefix, name, number, offset }
+    var sheets     = []; // { index, page, col, row, used }
+    var sheet      = null;
+    function newSheet() {
+        var n    = sheets.length;
+        var slot = n % SHEETS_PER_PAGE;
+        sheet = { index: n, page: Math.floor(n / SHEETS_PER_PAGE) + 1,
+                  col: slot % SHEETS_PER_ROW, row: Math.floor(slot / SHEETS_PER_ROW), used: 0 };
+        sheets.push(sheet);
+    }
+    function placeSlot(h) {
+        var gap = (sheet && sheet.used > 0) ? PRODUCT_GAP : 0;
+        if (!sheet || sheet.used + gap + h > SHEET_H) { newSheet(); gap = 0; } // sheet full
+        var slot = { sheet: sheet, offset: sheet.used + gap };
+        sheet.used += gap + h;
         return slot;
     }
 
-    newPage();
     for (var s = 0; s < preparedSizes.length; s++) {
         var sz   = preparedSizes[s];
         var list = orders[sz];
@@ -268,47 +276,120 @@ function main() {
         // Per size: pack all shirts first, then all pants — but only the parts that
         // Step 1 actually produced for this design (shirt-only / pant-only / both).
         if (hasShirtParts(sourceDoc, sz)) {
+            var sb = shirtBlock(sz);
+            checkFits(sb, 'Áo size ' + sz);
             for (var q = 0; q < list.length; q++) {
-                var ss = placeSlot(shirtArtH(sz));
-                placements.push({ page: ss.page, kind: 'SHIRT', sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ss.left, top: ss.top });
+                var ss = placeSlot(sb.height);
+                placements.push({ sheet: ss.sheet, kind: 'SHIRT', sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, offset: ss.offset });
             }
         }
         if (hasPantParts(sourceDoc, sz)) {
+            var pb = pantBlock(sz);
+            checkFits(pb, 'Quần size ' + sz);
             for (var q = 0; q < list.length; q++) {
-                var ps = placeSlot(pantArtH(sz));
-                placements.push({ page: ps.page, kind: 'PANT',  sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, left: ps.left, top: ps.top });
+                var ps = placeSlot(pb.height);
+                placements.push({ sheet: ps.sheet, kind: 'PANT',  sz: sz, prefix: sz + '_' + (q + 1), name: list[q].name, number: list[q].number, offset: ps.offset });
             }
         }
     }
-    var numPages = pgCount;
+    var numPages = sheet.page;
 
-    // Stamp each placement with a global 1-based sequence number (placements is already
-    // in creation order). Zero-padded, it becomes the artboard-name prefix so a plain
-    // File ▸ Export ▸ Export As (sorted alphabetically) keeps the original order.
-    var seqWidth = String(placements.length).length;
+    // Name each sheet's artboard with its global 1-based sequence number, zero-padded,
+    // so a plain File ▸ Export ▸ Export As (sorted alphabetically) keeps the order.
+    var seqWidth = Math.max(2, String(sheets.length).length);
     function padSeq(n) { var s = String(n); while (s.length < seqWidth) s = '0' + s; return s; }
-    for (var i = 0; i < placements.length; i++) placements[i].seq = i + 1;
 
     // -------------------------------------------------------
-    // Phase 2: save the masters once, then build each page inside its own copy.
+    // Phase 2: build each page inside its own copy of the Large Canvas template.
     // -------------------------------------------------------
-    var ts         = (new Date()).getTime();
-    var masterTemp = new File(Folder.temp + '/_mk_master_' + ts + '.ai');
+    var ts = (new Date()).getTime();
 
     function buildPage(pageNo) {
         var pageFile = new File(Folder.temp + '/_mk_page_' + pageNo + '_' + ts + '.ai');
-        masterTemp.copy(pageFile);
-        var doc = app.open(pageFile); // independent copy — masters are same-document here
+        template.copy(pageFile);
+        var doc = app.open(pageFile); // independent copy — the template is never modified
 
+        // A Large Canvas document is scaled 1:scaleFactor (10): scripting reads and writes
+        // every coordinate and size there at 1/scaleFactor of its real value. Convert
+        // real points to this document's units with u().
+        var scale = doc.scaleFactor;
+        if (!scale || scale <= 1) {
+            throw new Error('File mẫu ' + template.fsName + ' không phải Large Canvas. '
+                + 'Tạo lại file mới (File ▸ New) rộng hơn 578cm.');
+        }
+        function u(realPt) { return realPt / scale; }
+
+        // Center the sheet grid on the template's artboard: the canvas is centered on
+        // it, so the grid stays well inside the canvas.
+        var tAB      = doc.artboards[0].artboardRect; // [left, top, right, bottom]
+        var gridW    = u(SHEETS_PER_ROW * SHEET_W + (SHEETS_PER_ROW - 1) * SHEET_GAP);
+        var gridH    = u(SHEET_ROWS     * SHEET_H + (SHEET_ROWS     - 1) * SHEET_GAP);
+        var gridLeft = (tAB[0] + tAB[2]) / 2 - gridW / 2;
+        var gridTop  = (tAB[1] + tAB[3]) / 2 + gridH / 2;
+        function sheetLeft(sh) { return gridLeft + sh.col * u(SHEET_W + SHEET_GAP); }
+        function sheetTop(sh)  { return gridTop  - sh.row * u(SHEET_H + SHEET_GAP); }
+
+        var mastersLayer = doc.layers.add();
+        mastersLayer.name = 'MASTERS';
         var outLayer = doc.layers.add();
         outLayer.name = 'PRINT_OUTPUT';
 
+        // Bring every master part this page needs (each _OUTLINE+_FINAL instance group)
+        // over from the Step-1 document in one clipboard copy/paste, so the per-order
+        // duplicates are same-document (fast). Copy/paste is the only route that keeps
+        // the real size: duplicate() into a Large Canvas keeps the numbers (10× too big),
+        // and resize() to undo that thins text strokes to 1/100.
+        var keys = [], masters = {};
+        for (var i = 0; i < placements.length; i++) {
+            var pl = placements[i];
+            if (pl.sheet.page !== pageNo) continue;
+            var sides = (pl.kind === 'SHIRT') ? ['FRONT', 'BACK', 'LEFT_SLEEVE', 'RIGHT_SLEEVE'] : pantSides(sourceDoc, pl.sz);
+            for (var j = 0; j < sides.length; j++) {
+                var key = pl.sz + '_' + sides[j];
+                if (!contains(keys, key)) keys.push(key);
+            }
+        }
+
+        app.activeDocument = sourceDoc;
+        sourceDoc.selection = null;
+        for (var i = 0; i < keys.length; i++) {
+            requireItem(sourceDoc.pageItems, keys[i] + '_FINAL', sourceDoc.name).parent.selected = true;
+        }
+        if (sourceDoc.selection.length !== keys.length) {
+            sourceDoc.selection = null;
+            throw new Error('Không chọn được các chi tiết trong ' + sourceDoc.name + ' để sao chép. Hãy mở khóa / hiện layer SIZED_OUTPUT.');
+        }
+        app.copy();
+        sourceDoc.selection = null; // a lingering selection here blocks selecting in other docs
+
+        app.activeDocument = doc;
+        doc.activeLayer = mastersLayer;
+        app.paste();
+        doc.selection = null;
+
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var m = {
+                design:  requireItem(doc.pageItems, key + '_FINAL',   doc.name),
+                outline: requireItem(doc.pageItems, key + '_OUTLINE', doc.name)
+            };
+            // The copy must keep its real size. Fail loudly (with the numbers) rather
+            // than print at the wrong size.
+            var srcW  = vbByName(sourceDoc, key + '_FINAL').width;
+            var copyW = visBounds(m.design).width * scale;
+            if (Math.abs(copyW - srcW) > srcW * 0.01) {
+                throw new Error('Kích thước ' + key + ' bị thay đổi khi chép sang Large Canvas: '
+                    + srcW.toFixed(1) + 'pt → ' + copyW.toFixed(1) + 'pt (scaleFactor ' + scale + ').');
+            }
+            masters[key] = m;
+        }
+
         function dupPart(sz, side, instanceName, name, number) {
-            var sf = requireItem(doc.pageItems, sz + '_' + side + '_FINAL',   doc.name);
-            var so = requireItem(doc.pageItems, sz + '_' + side + '_OUTLINE', doc.name);
-            var g = sf.duplicate(outLayer, ElementPlacement.PLACEATEND); g.name = instanceName + '_FINAL';
-            var o = so.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
-            applyField(g, TEN, name,   CUSTOMER_NAME_MAX_WIDTH[sz]);
+            var m = masters[sz + '_' + side];
+            var g = m.design.duplicate(outLayer, ElementPlacement.PLACEATEND);   g.name = instanceName + '_FINAL';
+            var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
+            var maxW = CUSTOMER_NAME_MAX_WIDTH[sz];
+            applyField(g, TEN, name,   maxW ? u(maxW) : null);
             applyField(g, SO,  number, null);
 
             // Keep each part-instance's _OUTLINE and _FINAL together as a single group,
@@ -322,23 +403,20 @@ function main() {
             return g;
         }
         // The parts keep their Step-1 relative layout. Translate the whole block as a
-        // unit into the slot (horizontally centered in the artboard, padded from the
-        // top), then frame it with an artboard of print-width × the block's own height.
-        function placeBlock(parts, p, suffix) {
+        // unit into its slot: horizontally centered in the sheet, top at the slot top.
+        function placeBlock(parts, p) {
             var boxes = [];
             for (var i = 0; i < parts.length; i++) boxes.push(visBounds(parts[i]));
             var bb = unionBounds(boxes);
 
-            var dx = (p.left + (artboardWidth - bb.width) / 2) - bb.left;
-            var dy = (p.top - padding) - bb.top;
+            var dx = (sheetLeft(p.sheet) + (u(SHEET_W) - bb.width) / 2) - bb.left;
+            var dy = (sheetTop(p.sheet) - u(p.offset)) - bb.top;
             // Each part is the _FINAL clip group; its parent is the _OUTLINE+_FINAL
             // instance group. Moving the parent translates outline and design together.
             for (var j = 0; j < parts.length; j++) {
                 var ig = parts[j].parent;
                 ig.position = [ig.position[0] + dx, ig.position[1] + dy];
             }
-
-            doc.artboards.add([p.left, p.top, p.left + artboardWidth, p.top - (bb.height + padding * 2)]).name = padSeq(p.seq) + '_' + p.prefix + suffix;
         }
 
         function buildShirt(p) {
@@ -347,37 +425,44 @@ function main() {
                 dupPart(p.sz, 'BACK',         p.prefix + '_BACK',         p.name, p.number),
                 dupPart(p.sz, 'LEFT_SLEEVE',  p.prefix + '_LEFT_SLEEVE',  p.name, p.number),
                 dupPart(p.sz, 'RIGHT_SLEEVE', p.prefix + '_RIGHT_SLEEVE', p.name, p.number)
-            ], p, '_SHIRT');
+            ], p);
         }
         function buildPant(p) {
             var sides = pantSides(sourceDoc, p.sz), parts = [];
             for (var i = 0; i < sides.length; i++) {
                 parts.push(dupPart(p.sz, sides[i], p.prefix + '_' + sides[i], p.name, p.number));
             }
-            placeBlock(parts, p, '_PANT');
+            placeBlock(parts, p);
         }
 
         for (var i = 0; i < placements.length; i++) {
             var p = placements[i];
-            if (p.page !== pageNo) continue;
+            if (p.sheet.page !== pageNo) continue;
             if (p.kind === 'SHIRT') buildShirt(p); else buildPant(p);
         }
 
-        // Drop the masters and the original Step-1 artboard, leaving only the products.
-        try { doc.layers.getByName('SIZED_OUTPUT').remove(); } catch (e) {}
-        if (doc.artboards.length > 1) doc.artboards.remove(0);
+        // One fixed-size artboard per sheet on this page.
+        for (var k = 0; k < sheets.length; k++) {
+            var sh = sheets[k];
+            if (sh.page !== pageNo) continue;
+            var l = sheetLeft(sh), t = sheetTop(sh);
+            doc.artboards.add([l, t, l + u(SHEET_W), t - u(SHEET_H)]).name = padSeq(sh.index + 1);
+        }
+
+        // Drop the masters and the template's own artboard, leaving only the products.
+        mastersLayer.remove();
+        doc.artboards.remove(0);
     }
 
     var prevUIL = app.userInteractionLevel;
     app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
     try {
-        sourceDoc.saveAs(masterTemp, new IllustratorSaveOptions());
         for (var pg = 1; pg <= numPages; pg++) buildPage(pg);
     } finally {
         app.userInteractionLevel = prevUIL;
     }
 
-    alert('Hoàn thành! Đã tạo ' + numPages + ' tài liệu.');
+    alert('Hoàn thành! Đã tạo ' + numPages + ' tài liệu, ' + sheets.length + ' tấm in (159cm × 500cm).');
 }
 
 try {
