@@ -19,7 +19,7 @@ function makeNestEnv() {
 }
 
 test('every .jsx file parses as ES3-era JavaScript (after its # directives)', function () {
-    const files = ['nhap_ten_so.jsx', 'nhay_size.jsx']
+    const files = ['nhap_ten_so.jsx', 'nhay_size.jsx', 'xep_nhanh.jsx', 'xep_toi_uu.jsx']
         .concat(fs.readdirSync(path.join(ROOT, 'lib')).filter((f) => f.endsWith('.jsx')).map((f) => 'lib/' + f))
         .concat(fs.readdirSync(path.join(ROOT, 'tools')).filter((f) => f.endsWith('.jsx')).map((f) => 'tools/' + f));
     for (const f of files) {
@@ -32,7 +32,7 @@ test('nestResultToLayout maps parts back to their items and sheets to the page g
     const env = makeNestEnv();
     env.SHEETS_PER_ROW = 2;
     env.SHEET_ROWS = 1;
-    const items = [{ key: 'S_FRONT', data: 'a' }, { key: 'S_BACK', data: 'b' }, { key: 'S_FRONT', data: 'c' }];
+    const items = [{ key: 'S_FRONT', id: 'a' }, { key: 'S_BACK', id: 'b' }, { key: 'S_FRONT', id: 'c' }];
     const layout = env.nestResultToLayout({
         sheets: 3,
         placements: [{ part: 0, sheet: 0, x: 1, y: 2, rot: 0 }, { part: 1, sheet: 2, x: 3, y: 4, rot: 180 },
@@ -41,7 +41,7 @@ test('nestResultToLayout maps parts back to their items and sheets to the page g
     assert.equal(layout.sheets.length, 3);
     assert.deepEqual(Array.from(layout.sheets, (s) => [s.page, s.col]), [[1, 0], [1, 1], [2, 0]]);
     const b = layout.placements[1];
-    assert.equal(b.data, 'b');
+    assert.equal(b.data, items[1]);
     assert.equal(b.sheet, layout.sheets[2]);
     assert.deepEqual([b.x, b.y, b.rot], [3, 4, 180]);
 });
@@ -59,17 +59,17 @@ test('end to end: export → nester CLI → layout', function () {
             const p = [ring[i], 1000 - ring[i + 1]];
             pts.push({ anchor: p, leftDirection: p, rightDirection: p });
         }
-        outlines[key + '_OUTLINE'] = {
+        outlines[key] = {
             typename: 'PathItem', closed: true, pathPoints: pts,
             stroked: true, strokeWidth: 2 * s.pad, strokeMiterLimit: s.miter,
-            visibleBounds: [0, 1000, s.w, 1000 - s.h]
+            visibleBounds: [0, 1000, s.w, 1000 - s.h],
+            geometricBounds: [s.pad, 1000 - s.pad, s.w - s.pad, 1000 - s.h + s.pad]
         };
     }
-    const doc = { name: 'step1.ai', pageItems: { getByName: (n) => outlines[n] } };
     const items = [];
-    for (let q = 0; q < 3; q++) for (const key of ['M_FRONT', 'M_LEFT_PANT']) items.push({ key, data: key + '#' + q });
+    for (let q = 0; q < 3; q++) for (const key of ['M_FRONT', 'M_LEFT_PANT']) items.push({ key, outline: outlines[key], n: q });
 
-    const job = env.buildNestJob(doc, items.map((it) => it.key), 1);
+    const job = env.buildNestJob(items, 1, 1);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mk-nest-'));
     fs.writeFileSync(path.join(dir, 'job.json'), env.toJSON(job));
     execFileSync(process.execPath, [path.join(ROOT, 'nester/cli.js'), path.join(dir, 'job.json'), dir]);
@@ -79,6 +79,6 @@ test('end to end: export → nester CLI → layout', function () {
     assertValidResult(JSON.parse(env.toJSON(job)), result);
     const layout = env.nestResultToLayout(result, items);
     assert.equal(layout.placements.length, items.length);
-    assert.deepEqual(Array.from(layout.placements, (p) => p.data).sort(), items.map((it) => it.data).sort());
+    assert.deepEqual(new Set(Array.from(layout.placements, (p) => p.data)), new Set(items), 'each item placed once');
     assert.ok(Array.from(layout.placements).every((p) => p.rot === 0 || p.rot === 180));
 });

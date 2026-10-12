@@ -1,5 +1,6 @@
-// Print-sheet layout for nhap_ten_so.jsx — pure geometry, no Illustrator DOM, so it can
-// be unit-tested under node --test as well as #included. Needs PT_PER_MM (config.jsx).
+// Print-sheet layout for nhap_ten_so.jsx and the layout engines (xep_nhanh.jsx,
+// xep_toi_uu.jsx) — pure geometry, no Illustrator DOM, so it can be unit-tested under
+// node --test as well as #included. Needs PT_PER_MM (config.jsx).
 
 // Every sheet (artboard) is a fixed 159cm × 500cm. All sizes here are REAL sizes, in pt.
 var SHEET_W     = 159 * 10 * PT_PER_MM;
@@ -13,7 +14,20 @@ var PRODUCT_GAP = 3 * PT_PER_MM;     // 3mm between parts in a sheet
 var SHEETS_PER_ROW = 6;
 var SHEET_ROWS     = 2;
 
-// Throw if a part can never fit on a sheet.
+// Union of several { left, top, width, height } boxes into one bounding box.
+function unionBounds(boxes) {
+    var left = Infinity, top = -Infinity, right = -Infinity, bottom = Infinity;
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        if (b.left < left) left = b.left;
+        if (b.top > top) top = b.top;
+        if (b.left + b.width > right) right = b.left + b.width;
+        if (b.top - b.height < bottom) bottom = b.top - b.height;
+    }
+    return { left: left, top: top, width: right - left, height: top - bottom };
+}
+
+// Throw if a product or part can never fit on a sheet.
 function checkFits(block, label) {
     var cm = 10 * PT_PER_MM;
     if (block.width > SHEET_W || block.height > SHEET_H) {
@@ -31,6 +45,32 @@ function makeSheet(n) {
              col: slot % SHEETS_PER_ROW, row: Math.floor(slot / SHEETS_PER_ROW) };
 }
 
+// Packs products into sheets, in order (nhap_ten_so.jsx). Products stack top to bottom
+// in a sheet with PRODUCT_GAP between them; one that doesn't fit starts a new sheet.
+// place(height) returns { sheet, offset }: offset is the real distance (pt) from the
+// sheet top to the product top. sheets[i] is makeSheet(i) plus used (pt).
+function createSheetPacker() {
+    var sheets = [];
+    var sheet  = null;
+
+    return {
+        sheets: sheets,
+        place: function (h) {
+            var gap = (sheet && sheet.used > 0) ? PRODUCT_GAP : 0;
+            if (!sheet || sheet.used + gap + h > SHEET_H) { // sheet full
+                sheet = makeSheet(sheets.length);
+                sheet.used = 0;
+                sheets.push(sheet);
+                gap = 0;
+            }
+            var slot = { sheet: sheet, offset: sheet.used + gap };
+            sheet.used += gap + h;
+            return slot;
+        },
+        pageCount: function () { return sheet ? sheet.page : 0; }
+    };
+}
+
 // Where each sheet sits in a page document, in that document's units (real pt divided
 // by its scale factor). The grid is centered on the template artboard abRect
 // ([left, top, right, bottom]) — the canvas is centered on it, so the grid stays well
@@ -38,8 +78,11 @@ function makeSheet(n) {
 function sheetGrid(abRect, scale) {
     var w = (SHEETS_PER_ROW * SHEET_W + (SHEETS_PER_ROW - 1) * SHEET_GAP) / scale;
     var h = (SHEET_ROWS     * SHEET_H + (SHEET_ROWS     - 1) * SHEET_GAP) / scale;
-    var gridLeft = (abRect[0] + abRect[2]) / 2 - w / 2;
-    var gridTop  = (abRect[1] + abRect[3]) / 2 + h / 2;
+    return sheetGridAt((abRect[0] + abRect[2]) / 2 - w / 2, (abRect[1] + abRect[3]) / 2 + h / 2, scale);
+}
+
+// The same grid, with its top-left sheet's top-left corner at (gridLeft, gridTop).
+function sheetGridAt(gridLeft, gridTop, scale) {
     return {
         rect: function (sh) {
             var l = gridLeft + sh.col * (SHEET_W + SHEET_GAP) / scale;

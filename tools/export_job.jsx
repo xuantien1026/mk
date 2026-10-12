@@ -25,14 +25,17 @@ function main() {
     var perSize = parseInt(answer, 10);
     if (!(perSize > 0)) { alert('Số không hợp lệ.'); return; }
 
-    var keys = [];
+    var items = [];
     for (var s = 0; s < sizes.length; s++) {
         var sides = productSides(doc, 'SHIRT', sizes[s]).concat(productSides(doc, 'PANT', sizes[s]));
         for (var q = 0; q < perSize; q++) {
-            for (var i = 0; i < sides.length; i++) keys.push(sizes[s] + '_' + sides[i]);
+            for (var i = 0; i < sides.length; i++) {
+                var key = sizes[s] + '_' + sides[i];
+                items.push({ key: key, outline: requireItem(doc.pageItems, key + '_OUTLINE', doc.name) });
+            }
         }
     }
-    var job = buildNestJob(doc, keys, 60);
+    var job = buildNestJob(items, 1, 60);
 
     var folder = new Folder(ROOT + '/test/fixtures');
     if (!folder.exists) folder.create();

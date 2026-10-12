@@ -19,6 +19,64 @@ test('makeSheet fills a page row by row, then starts a new page', function () {
     ]);
 });
 
+test('products stack in one sheet with PRODUCT_GAP between them', function () {
+    const env = makeSheetEnv();
+    const packer = env.createSheetPacker();
+    const a = packer.place(100 * CM);
+    const b = packer.place(100 * CM);
+    assert.equal(a.sheet, b.sheet);
+    assert.equal(a.offset, 0);
+    assert.equal(b.offset, 100 * CM + env.PRODUCT_GAP);
+    assert.equal(packer.sheets.length, 1);
+});
+
+test('a product that does not fit starts a new sheet at offset 0', function () {
+    const env = makeSheetEnv();
+    const packer = env.createSheetPacker();
+    packer.place(300 * CM);
+    const b = packer.place(250 * CM);          // 300 + gap + 250 > 500
+    assert.equal(packer.sheets.length, 2);
+    assert.equal(b.sheet.index, 1);
+    assert.equal(b.offset, 0);
+});
+
+test('a product filling the rest of a sheet exactly still fits', function () {
+    const env = makeSheetEnv();
+    const packer = env.createSheetPacker();
+    packer.place(200 * CM);
+    packer.place(env.SHEET_H - 200 * CM - env.PRODUCT_GAP);
+    assert.equal(packer.sheets.length, 1);
+});
+
+test('sheets fill a page row by row, then start a new page', function () {
+    const env = makeSheetEnv();
+    env.SHEETS_PER_ROW = 3;
+    env.SHEET_ROWS     = 2;
+    const packer = env.createSheetPacker();
+    for (let i = 0; i < 7; i++) packer.place(env.SHEET_H); // one full sheet each
+    const pos = Array.from(packer.sheets).map(function (s) { return [s.page, s.row, s.col]; });
+    assert.deepEqual(pos, [
+        [1, 0, 0], [1, 0, 1], [1, 0, 2],
+        [1, 1, 0], [1, 1, 1], [1, 1, 2],
+        [2, 0, 0]
+    ]);
+    assert.equal(packer.pageCount(), 2);
+});
+
+test('pageCount is 0 before anything is placed', function () {
+    const env = makeSheetEnv();
+    assert.equal(env.createSheetPacker().pageCount(), 0);
+});
+
+test('unionBounds covers every box', function () {
+    const env = makeSheetEnv();
+    const u = env.unionBounds([
+        { left: 0,  top: 100, width: 50, height: 40 },
+        { left: 60, top: 80,  width: 20, height: 70 }
+    ]);
+    assert.deepEqual({ ...u }, { left: 0, top: 100, width: 80, height: 90 });
+});
+
 test('checkFits rejects a block wider or taller than a sheet', function () {
     const env = makeSheetEnv();
     env.checkFits({ width: 159 * CM, height: 500 * CM }, 'ok');

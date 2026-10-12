@@ -1,14 +1,14 @@
 // Layout engine 2 from Illustrator: nest parts by their real outlines (nester/), turning
 // some 180°. Needs json.jsx, export_shapes.jsx, nester_bridge.jsx, sheet_layout.jsx.
 
-// items: [{ key, data }] — one per part to print, key = {size}_{side}. Shows a progress
-// window while the nester runs: about timeLimit seconds, plus minutes beforehand for a
-// design with many sizes. Returns { sheets, placements: [{ sheet, x, y, rot, data }] },
-// like layoutSequential plus rot (0/180: turn the part about its center first).
-function layoutNest(doc, items, timeLimit, root) {
-    var keys = [];
-    for (var i = 0; i < items.length; i++) keys.push(items[i].key);
-    var job = buildNestJob(doc, keys, timeLimit);
+// items: [{ key, outline, ... }] — one per part to print; key = {size}_{side} names its
+// shape, outline is its cut outline in a document whose units are 1/scale of real pt.
+// Shows a progress window while the nester runs: about timeLimit seconds, plus minutes
+// beforehand for a design with many sizes. Returns { sheets, placements: [{ sheet, x,
+// y, rot, data }] } like layoutSequential, with data the item and rot (0/180) to turn
+// the part about its center first.
+function layoutNest(items, scale, timeLimit, root) {
+    var job = buildNestJob(items, scale, timeLimit);
 
     var win = new Window('palette', 'Xếp tối ưu');
     win.alignChildren = 'fill';
@@ -41,7 +41,7 @@ function nestResultToLayout(result, items) {
     var placements = [];
     for (var i = 0; i < result.placements.length; i++) {
         var pl = result.placements[i];
-        placements.push({ sheet: sheets[pl.sheet], x: pl.x, y: pl.y, rot: pl.rot, data: items[pl.part].data });
+        placements.push({ sheet: sheets[pl.sheet], x: pl.x, y: pl.y, rot: pl.rot, data: items[pl.part] });
     }
     return { sheets: sheets, placements: placements };
 }
