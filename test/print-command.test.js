@@ -10,7 +10,7 @@ function csv(rows) {
 test('parseOrders builds {size, number, name, variant} from a full header', function () {
     const { parseOrders } = makePrintEnv();
     const text = csv([
-        ['Size', 'Số Áo', 'Tên In Trên Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ', 'MẪU'],
         ['m', '10', 'Alice', 'Design A'],
         ['l', '11', 'Bob',   'Design B']
     ]);
@@ -23,11 +23,33 @@ test('parseOrders builds {size, number, name, variant} from a full header', func
     assert.equal(orders[1].variant, 'Design B');
 });
 
+test('parseOrders reads the detail table of a production order, skipping the summary', function () {
+    const { parseOrders } = makePrintEnv();
+    const orders = parseOrders(csv([
+        ['MK1026000', '', '', '', '', '', '', ''],
+        ['KHÁCH HÀNG:', 'NGUYỄN ANH MAI - HÀ NỘI', '', '', '', 'CHẤT LIỆU', 'KIM CƯƠNG NHẬT BẢN', ''],
+        ['BẢNG TỔNG HỢP', '', '', '', '', '', '', ''],
+        ['Mẫu', 'Size', 'Form', 'Tổng số lượng', '', '', '', ''],
+        ['1', 'M', 'NỮ', '2', '', '', '', ''],
+        ['', 'TỔNG SỐ LƯỢNG', '', '2', '', '', '', ''],
+        ['DANH SÁCH CHI TIẾT', '', '', '', '', '', '', ''],
+        ['STT', 'TÊN TRÊN SỐ', 'SỐ', 'TÊN DƯỚI SỐ', 'SIZE', 'SỐ LƯỢNG', 'FORM', 'MẪU'],
+        ['1', 'A', '1', '', 'M', '', 'NỮ', '1'],
+        ['2', 'B', '2', '', 'l', '', '', '1']
+    ]));
+    assert.equal(orders.length, 2);
+    assert.deepEqual(
+        { size: orders[0].size, number: orders[0].number, name: orders[0].name, variant: orders[0].variant },
+        { size: 'M', number: '1', name: 'A', variant: '1' }
+    );
+    assert.equal(orders[1].size, 'L');
+});
+
 test('parseOrders matches headers regardless of accent/case', function () {
     const { parseOrders } = makePrintEnv();
     for (const variantHeader of ['Mẫu', 'MAU', 'mẫu', '  mau  ']) {
         const orders = parseOrders(csv([
-            ['SIZE', 'so ao', variantHeader],
+            ['size', 'so', variantHeader],
             ['s', '1', 'X']
         ]));
         assert.equal(orders.length, 1, 'header "' + variantHeader + '" should match');
@@ -38,7 +60,7 @@ test('parseOrders matches headers regardless of accent/case', function () {
 test('parseOrders leaves optional columns as empty strings when absent', function () {
     const { parseOrders } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo'],
+        ['SIZE', 'SỐ'],
         ['m', '7']
     ]));
     assert.equal(orders[0].name, '');
@@ -49,7 +71,7 @@ test('parseOrders skips rows above the header and blank-size rows', function () 
     const { parseOrders } = makePrintEnv();
     const orders = parseOrders(csv([
         ['Bảng lệnh in', ''],
-        ['Size', 'Số Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'A'],
         ['',  '2', 'A'],   // blank size — skipped
         ['l', '3', 'B']
@@ -62,7 +84,7 @@ test('parseOrders skips rows above the header and blank-size rows', function () 
 test('parseOrders handles quoted fields with embedded commas and strips BOM', function () {
     const { parseOrders } = makePrintEnv();
     const text = '﻿' + csv([
-        ['Size', 'Số Áo', 'Tên In Trên Áo'],
+        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ'],
         ['m', '1', '"Doe, John"']
     ]);
     const orders = parseOrders(text);
@@ -72,13 +94,13 @@ test('parseOrders handles quoted fields with embedded commas and strips BOM', fu
 
 test('parseOrders throws when required columns are missing', function () {
     const { parseOrders } = makePrintEnv();
-    assert.throws(() => parseOrders(csv([['Tên In Trên Áo'], ['Alice']])));
+    assert.throws(() => parseOrders(csv([['TÊN TRÊN SỐ'], ['Alice']])));
 });
 
 test('distinctVariant returns values in first-seen order with dedupe', function () {
     const { parseOrders, distinctVariant } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'B'],
         ['l', '2', 'A'],
         ['s', '3', 'B']
@@ -89,7 +111,7 @@ test('distinctVariant returns values in first-seen order with dedupe', function 
 test('distinctVariant yields [""] when the Mẫu column is absent (no prompt)', function () {
     const { parseOrders, distinctVariant } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo'],
+        ['SIZE', 'SỐ'],
         ['m', '1'],
         ['l', '2']
     ]));
@@ -101,7 +123,7 @@ test('distinctVariant yields [""] when the Mẫu column is absent (no prompt)', 
 test('distinctVariant yields [""] when every Mẫu cell is blank (no prompt)', function () {
     const { parseOrders, distinctVariant } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', ''],
         ['l', '2', '']
     ]));
@@ -113,7 +135,7 @@ test('distinctVariant yields [""] when every Mẫu cell is blank (no prompt)', f
 test('distinctVariant includes the blank group when blanks mix with values', function () {
     const { parseOrders, distinctVariant } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'A'],
         ['l', '2', '']
     ]));
@@ -132,7 +154,7 @@ function filterByVariant(orders, chosen) {
 test('filtering by a chosen value keeps exactly the matching rows', function () {
     const { parseOrders } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'A'],
         ['l', '2', 'B'],
         ['s', '3', 'A']
@@ -145,7 +167,7 @@ test('filtering by a chosen value keeps exactly the matching rows', function () 
 test('filtering by the blank group keeps exactly the blank-variant rows', function () {
     const { parseOrders } = makePrintEnv();
     const orders = parseOrders(csv([
-        ['Size', 'Số Áo', 'Mẫu'],
+        ['SIZE', 'SỐ', 'MẪU'],
         ['m', '1', 'A'],
         ['l', '2', ''],
         ['s', '3', '']

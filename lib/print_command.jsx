@@ -60,15 +60,12 @@ function contains(arr, value) {
     return false;
 }
 
-// Parse the CSV text, locate the header row by its Size / Số Áo / Tên In Trên Áo /
-// Mẫu columns, and return the order rows as [{ size, number, name, variant }].
-// Size and Số Áo are required; Tên In Trên Áo and Mẫu are optional ('' when absent).
 function parseOrders(text) {
     if (text.length && text.charCodeAt(0) === 0xFEFF) text = text.substring(1); // strip BOM
 
     var rows = parseCsv(text);
 
-    var HDR_SIZE = 'size', HDR_SO = 'so ao', HDR_TEN = 'ten in tren ao', HDR_VARIANT = 'mau';
+    var HDR_SIZE = 'size', HDR_SO = 'so', HDR_TEN = 'ten tren so', HDR_VARIANT = 'mau';
     var headerRow = -1, sizeCol = -1, soCol = -1, tenCol = -1, variantCol = -1;
     for (var r = 0; r < rows.length && headerRow === -1; r++) {
         var sCol = -1, nCol = -1, tCol = -1, vCol = -1;
@@ -83,7 +80,7 @@ function parseOrders(text) {
             headerRow = r; sizeCol = sCol; soCol = nCol; tenCol = tCol; variantCol = vCol;
         }
     }
-    if (headerRow === -1) throw new Error('Khong tim thay bang du lieu (thieu cot Size / So Ao) trong file CSV.');
+    if (headerRow === -1) throw new Error('Khong tim thay bang du lieu (thieu cot SIZE / SO) trong file CSV.');
 
     var orders = [];
     for (var r = headerRow + 1; r < rows.length; r++) {
