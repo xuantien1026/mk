@@ -56,12 +56,12 @@ function makeUtilsEnv() {
     return context;
 }
 
-// Loads the pure print-sheet layout (lib/sheet_layout.jsx) with its PT_PER_MM
-// dependency from config.jsx. Override SHEET_* globals on the returned context to test
-// other layouts — the functions read them at call time.
+// Loads the pure print-sheet layout (lib/sheet_layout.jsx) and the layout engines, with
+// their PT_PER_MM dependency from config.jsx. Override SHEET_* globals on the returned
+// context to test other layouts — the functions read them at call time.
 function makeSheetEnv() {
     const context = vm.createContext({});
-    for (const rel of ['lib/config.jsx', 'lib/sheet_layout.jsx']) {
+    for (const rel of ['lib/config.jsx', 'lib/sheet_layout.jsx', 'lib/layout_sequential.jsx']) {
         vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), context);
     }
     return context;

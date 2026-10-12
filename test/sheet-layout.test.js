@@ -4,6 +4,21 @@ const { makeSheetEnv } = require('./helpers/helper');
 
 const CM = 10 * 2.83465;
 
+test('makeSheet fills a page row by row, then starts a new page', function () {
+    const env = makeSheetEnv();
+    env.SHEETS_PER_ROW = 3;
+    env.SHEET_ROWS     = 2;
+    const pos = [0, 1, 2, 3, 4, 5, 6].map(function (n) {
+        const s = env.makeSheet(n);
+        return [s.index, s.page, s.row, s.col];
+    });
+    assert.deepEqual(pos, [
+        [0, 1, 0, 0], [1, 1, 0, 1], [2, 1, 0, 2],
+        [3, 1, 1, 0], [4, 1, 1, 1], [5, 1, 1, 2],
+        [6, 2, 0, 0]
+    ]);
+});
+
 test('products stack in one sheet with PRODUCT_GAP between them', function () {
     const env = makeSheetEnv();
     const packer = env.createSheetPacker();
@@ -53,6 +68,15 @@ test('pageCount is 0 before anything is placed', function () {
     assert.equal(env.createSheetPacker().pageCount(), 0);
 });
 
+test('unionBounds covers every box', function () {
+    const env = makeSheetEnv();
+    const u = env.unionBounds([
+        { left: 0,  top: 100, width: 50, height: 40 },
+        { left: 60, top: 80,  width: 20, height: 70 }
+    ]);
+    assert.deepEqual({ ...u }, { left: 0, top: 100, width: 80, height: 90 });
+});
+
 test('checkFits rejects a block wider or taller than a sheet', function () {
     const env = makeSheetEnv();
     env.checkFits({ width: 159 * CM, height: 500 * CM }, 'ok');
@@ -76,15 +100,6 @@ test('sheetGrid centers the grid on the artboard and scales to document units', 
     assert.ok(Math.abs((r0[1] - r0[3]) - h) < 1e-9);
     assert.ok(Math.abs(r1[0] - (r0[2] + gap)) < 1e-9);
     assert.ok(Math.abs((r1[2] + r0[0]) / 2 - 500) < 1e-9); // symmetric about the center
-});
-
-test('unionBounds covers every box', function () {
-    const env = makeSheetEnv();
-    const u = env.unionBounds([
-        { left: 0,  top: 100, width: 50, height: 40 },
-        { left: 60, top: 80,  width: 20, height: 70 }
-    ]);
-    assert.deepEqual({ ...u }, { left: 0, top: 100, width: 80, height: 90 });
 });
 
 test('sheetName zero-pads to at least two digits and to the total width', function () {

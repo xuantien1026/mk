@@ -1,11 +1,12 @@
-// Print-sheet layout for nhap_ten_so.jsx — pure geometry, no Illustrator DOM, so it can
-// be unit-tested under node --test as well as #included. Needs PT_PER_MM (config.jsx).
+// Print-sheet layout for nhap_ten_so.jsx and the layout engines (xep_nhanh.jsx,
+// xep_toi_uu.jsx) — pure geometry, no Illustrator DOM, so it can be unit-tested under
+// node --test as well as #included. Needs PT_PER_MM (config.jsx).
 
 // Every sheet (artboard) is a fixed 159cm × 500cm. All sizes here are REAL sizes, in pt.
 var SHEET_W     = 159 * 10 * PT_PER_MM;
 var SHEET_H     = 500 * 10 * PT_PER_MM;
 var SHEET_GAP   = 100;               // gap between sheets on a page
-var PRODUCT_GAP = 3 * PT_PER_MM;     // 3mm between products stacked in a sheet
+var PRODUCT_GAP = 4 * PT_PER_MM;     // 5mm between products / parts in a sheet
 
 // Sheets per output document, as a grid: SHEETS_PER_ROW across × SHEET_ROWS down.
 // A normal Illustrator canvas (max ~578cm) only holds 3 sheets, so every output document
@@ -26,7 +27,7 @@ function unionBounds(boxes) {
     return { left: left, top: top, width: right - left, height: top - bottom };
 }
 
-// Throw if a product's block can never fit on a sheet.
+// Throw if a product or part can never fit on a sheet.
 function checkFits(block, label) {
     var cm = 10 * PT_PER_MM;
     if (block.width > SHEET_W || block.height > SHEET_H) {
@@ -35,29 +36,33 @@ function checkFits(block, label) {
     }
 }
 
-// Packs products into sheets, in order. Products stack top to bottom in a sheet with
-// PRODUCT_GAP between them; one that doesn't fit starts a new sheet. Sheets fill a
-// page's grid row by row; a full page starts a new page (output document).
-// place(height) returns { sheet, offset }: offset is the real distance (pt) from the
-// sheet top to the product top. sheets[i] is { index, page, col, row, used }.
-function createSheetPacker() {
+// The n-th sheet (0-based) of a layout. Sheets fill a page's grid row by row; a full page
+// starts a new page (output document).
+function makeSheet(n) {
     var perPage = SHEETS_PER_ROW * SHEET_ROWS;
-    var sheets  = [];
-    var sheet   = null;
+    var slot    = n % perPage;
+    return { index: n, page: Math.floor(n / perPage) + 1,
+             col: slot % SHEETS_PER_ROW, row: Math.floor(slot / SHEETS_PER_ROW) };
+}
 
-    function newSheet() {
-        var n    = sheets.length;
-        var slot = n % perPage;
-        sheet = { index: n, page: Math.floor(n / perPage) + 1,
-                  col: slot % SHEETS_PER_ROW, row: Math.floor(slot / SHEETS_PER_ROW), used: 0 };
-        sheets.push(sheet);
-    }
+// Packs products into sheets, in order (nhap_ten_so.jsx). Products stack top to bottom
+// in a sheet with PRODUCT_GAP between them; one that doesn't fit starts a new sheet.
+// place(height) returns { sheet, offset }: offset is the real distance (pt) from the
+// sheet top to the product top. sheets[i] is makeSheet(i) plus used (pt).
+function createSheetPacker() {
+    var sheets = [];
+    var sheet  = null;
 
     return {
         sheets: sheets,
         place: function (h) {
             var gap = (sheet && sheet.used > 0) ? PRODUCT_GAP : 0;
-            if (!sheet || sheet.used + gap + h > SHEET_H) { newSheet(); gap = 0; } // sheet full
+            if (!sheet || sheet.used + gap + h > SHEET_H) { // sheet full
+                sheet = makeSheet(sheets.length);
+                sheet.used = 0;
+                sheets.push(sheet);
+                gap = 0;
+            }
             var slot = { sheet: sheet, offset: sheet.used + gap };
             sheet.used += gap + h;
             return slot;
@@ -73,8 +78,11 @@ function createSheetPacker() {
 function sheetGrid(abRect, scale) {
     var w = (SHEETS_PER_ROW * SHEET_W + (SHEETS_PER_ROW - 1) * SHEET_GAP) / scale;
     var h = (SHEET_ROWS     * SHEET_H + (SHEET_ROWS     - 1) * SHEET_GAP) / scale;
-    var gridLeft = (abRect[0] + abRect[2]) / 2 - w / 2;
-    var gridTop  = (abRect[1] + abRect[3]) / 2 + h / 2;
+    return sheetGridAt((abRect[0] + abRect[2]) / 2 - w / 2, (abRect[1] + abRect[3]) / 2 + h / 2, scale);
+}
+
+// The same grid, with its top-left sheet's top-left corner at (gridLeft, gridTop).
+function sheetGridAt(gridLeft, gridTop, scale) {
     return {
         rect: function (sh) {
             var l = gridLeft + sh.col * (SHEET_W + SHEET_GAP) / scale;

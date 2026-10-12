@@ -4,7 +4,7 @@
 // Step 1 names each part instance {size}_{side} — a group holding {size}_{side}_OUTLINE
 // (the cut line) and {size}_{side}_FINAL (the clipped design).
 
-var SHIRT_SIDES = ['FRONT', 'BACK', 'LEFT_SLEEVE', 'RIGHT_SLEEVE'];
+var SLEEVE_SIDES = ['LEFT_SLEEVE', 'RIGHT_SLEEVE'];
 
 // True if a page item with this name exists anywhere in the document.
 function itemExists(doc, name) {
@@ -22,10 +22,12 @@ function pantSides(doc, sz) {
 }
 
 // The sides making up one product ('SHIRT' or 'PANT') of a size. Empty when Step 1
-// didn't produce that product (shirt-only / pant-only designs).
+// didn't produce that product (shirt-only / pant-only designs). A sleeveless shirt
+// (e.g. basketball jersey) has no SLEEVE_SIDES.
 function productSides(doc, kind, sz) {
     if (kind === 'PANT') return pantSides(doc, sz);
-    return itemExists(doc, sz + '_BACK_FINAL') ? SHIRT_SIDES : [];
+    if (!itemExists(doc, sz + '_BACK_FINAL')) return [];
+    return itemExists(doc, sz + '_LEFT_SLEEVE_FINAL') ? ['FRONT', 'BACK'].concat(SLEEVE_SIDES) : ['FRONT', 'BACK'];
 }
 
 // Sizes for which Step 1 produced shirt and/or pant parts, in SIZES order.
