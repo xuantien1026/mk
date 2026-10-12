@@ -51,17 +51,15 @@ function dist(p, q) {
 
 function round3(v) { return Math.round(v * 1000) / 1000; }
 
-// The stroke of an outline — the first path's, for a compound path or group:
-// { width, miter } (miter = Illustrator's miter limit), or null when there is no path.
-function outlineStroke(item) {
-    if (item.typename === 'PathItem') {
-        return { width: item.stroked ? item.strokeWidth : 0, miter: item.strokeMiterLimit };
-    }
+// The miter limit of an outline's stroke — the first path's, for a compound path or
+// group — or null when there is no path.
+function outlineMiterLimit(item) {
+    if (item.typename === 'PathItem') return item.strokeMiterLimit;
     var children = item.typename === 'CompoundPathItem' ? item.pathItems
                  : item.typename === 'GroupItem' ? item.pageItems : [];
     for (var i = 0; i < children.length; i++) {
-        var s = outlineStroke(children[i]);
-        if (s) return s;
+        var m = outlineMiterLimit(children[i]);
+        if (m) return m;
     }
     return null;
 }
@@ -72,10 +70,12 @@ function outlineStroke(item) {
 // rebuilds the printed stroke from pad and miter, so pointed corners only cost space
 // where they actually are.
 //
-// On a straight outermost edge the visible box sits exactly half a stroke beyond the
-// geometry; elsewhere pointed corners push it further. So the smallest of the four
-// margins is at least half the stroke — a stroke width that disagrees with it (e.g.
-// reported unscaled in a Large Canvas document) is replaced by that margin.
+// pad is measured, not read from strokeWidth: in a Large Canvas document strokeWidth
+// doesn't convert to real size reliably (it gave half the real stroke, so engine 2 left
+// 3.5mm instead of 5mm). On a straight outermost edge the visible box sits exactly half
+// a stroke beyond the geometry; elsewhere pointed corners push it further — so the
+// smallest of the four margins is half the stroke (or, with no straight edge, a little
+// more: never too little).
 function exportShape(outline, scale) {
     var vb = outline.visibleBounds, gb = outline.geometricBounds;
     var rings = outlineRings(outline, TRACE_STEP / scale);
@@ -86,12 +86,9 @@ function exportShape(outline, scale) {
             r[j + 1] = round3((vb[1] - r[j + 1]) * scale);
         }
     }
-    var stroke = outlineStroke(outline) || { width: 0, miter: 4 };
-    var minMargin = Math.min(gb[0] - vb[0], vb[1] - gb[1], vb[2] - gb[2], gb[3] - vb[3]) * scale;
-    var pad = stroke.width * scale / 2;
-    if (pad > minMargin + 0.01) pad = minMargin;
+    var pad = Math.max(0, Math.min(gb[0] - vb[0], vb[1] - gb[1], vb[2] - gb[2], gb[3] - vb[3]) * scale);
     return { w: round3((vb[2] - vb[0]) * scale), h: round3((vb[1] - vb[3]) * scale), pad: round3(pad),
-             miter: stroke.miter, rings: rings };
+             miter: outlineMiterLimit(outline) || 4, rings: rings };
 }
 
 // The nester job for items [{ key, outline }] — one per part to print; parts with the

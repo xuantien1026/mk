@@ -94,8 +94,9 @@ test('exportShape and buildNestJob produce a job the nester can nest', async fun
 test('a Large Canvas outline (1/10 size) exports at its real size', function () {
     const env = makeExportEnv();
     const real = JSON.parse(env.toJSON(env.exportShape(pantOutline(1, 1), 1)));
-    // Stroke reported scaled like everything else, or unscaled: both give the real pad.
-    for (const strokeWidth of [0.1, 1]) {
+    // Whatever strokeWidth reports — scaled, unscaled, or half (what a Large Canvas page
+    // gave, leaving 3.5mm gaps instead of 5mm) — the pad comes from the measured box.
+    for (const strokeWidth of [0.1, 1, 0.05]) {
         const big = JSON.parse(env.toJSON(env.exportShape(pantOutline(10, strokeWidth), 10)));
         assert.equal(big.w, real.w);
         assert.equal(big.h, real.h);
