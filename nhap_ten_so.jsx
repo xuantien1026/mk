@@ -5,6 +5,7 @@
 #include "lib/print_command.jsx"
 #include "lib/print_dialogs.jsx"
 #include "lib/sheet_layout.jsx"
+#include "lib/layout_sequential.jsx"
 #include "lib/step1_parts.jsx"
 #include "lib/large_canvas.jsx"
 
@@ -88,32 +89,39 @@ function main() {
     if (totalQty === 0) { alert('Khong co don hang nao khop size da chuan bi.'); return; }
 
     // -------------------------------------------------------
-    // Phase 1: assign every product to a sheet + slot, using the master sizes (no
+    // Phase 1: assign every part to a sheet + position, using the master sizes (no
     // duplication needed — a duplicate is identical to its master).
     // Per size: all shirts first, then all pants — but only the products Step 1
-    // actually produced for this design (shirt-only / pant-only / both).
+    // actually produced for this design (shirt-only / pant-only / both). Sleeves go
+    // into the gaps afterwards, one after another.
     // -------------------------------------------------------
-    var KINDS  = [{ kind: 'SHIRT', label: 'Áo' }, { kind: 'PANT', label: 'Quần' }];
-    var packer = createSheetPacker();
-    var placements = []; // { sheet, offset, kind, sz, sides, prefix, order }
+    var KINDS = [{ kind: 'SHIRT', label: 'Áo' }, { kind: 'PANT', label: 'Quần' }];
+    var parts = [], sleeves = [];
     for (var s = 0; s < preparedSizes.length; s++) {
         var sz   = preparedSizes[s];
         var list = orders[sz];
         if (!list) continue;
         for (var t = 0; t < KINDS.length; t++) {
             var sides = productSides(sourceDoc, KINDS[t].kind, sz);
-            if (sides.length === 0) continue;
-            var block = productBlock(sourceDoc, sz, sides);
-            checkFits(block, KINDS[t].label + ' size ' + sz);
+            var size  = {}; // side → master bounds
+            for (var i = 0; i < sides.length; i++) {
+                size[sides[i]] = partBoundsByName(sourceDoc, sz + '_' + sides[i] + '_FINAL');
+                checkFits(size[sides[i]], KINDS[t].label + ' size ' + sz + ' (' + sides[i] + ')');
+            }
             for (var q = 0; q < list.length; q++) {
-                var slot = packer.place(block.height);
-                placements.push({ sheet: slot.sheet, offset: slot.offset, kind: KINDS[t].kind, sz: sz, sides: sides,
-                                  prefix: sz + '_' + (q + 1), order: list[q] });
+                for (var i = 0; i < sides.length; i++) {
+                    var part = { w: size[sides[i]].width, h: size[sides[i]].height,
+                                 label: KINDS[t].label + ' size ' + sz + ' (' + sides[i] + ')',
+                                 data: { sz: sz, side: sides[i], prefix: sz + '_' + (q + 1), order: list[q] } };
+                    (contains(SLEEVE_SIDES, sides[i]) ? sleeves : parts).push(part);
+                }
             }
         }
     }
-    var sheets   = packer.sheets;
-    var numPages = packer.pageCount();
+    var layout     = layoutSequential(parts, sleeves);
+    var sheets     = layout.sheets;
+    var placements = layout.placements; // { sheet, x, y, data: { sz, side, prefix, order } }
+    var numPages   = sheets.length ? sheets[sheets.length - 1].page : 0;
 
     // -------------------------------------------------------
     // Phase 2: build each page inside its own copy of the Large Canvas template.
@@ -135,10 +143,8 @@ function main() {
         // duplicates below are same-document (fast).
         var keys = [];
         for (var i = 0; i < pagePlacements.length; i++) {
-            for (var j = 0; j < pagePlacements[i].sides.length; j++) {
-                var key = pagePlacements[i].sz + '_' + pagePlacements[i].sides[j];
-                if (!contains(keys, key)) keys.push(key);
-            }
+            var key = pagePlacements[i].data.sz + '_' + pagePlacements[i].data.side;
+            if (!contains(keys, key)) keys.push(key);
         }
         var mastersLayer = doc.layers.add();
         mastersLayer.name = 'MASTERS';
@@ -168,28 +174,22 @@ function main() {
             return g;
         }
 
-        // Duplicate a product's parts and translate them as one block into its slot:
-        // horizontally centered in the sheet, top at the slot top. The parts keep their
-        // Step-1 relative layout.
-        function buildProduct(p) {
-            var parts = [], boxes = [];
-            for (var i = 0; i < p.sides.length; i++) {
-                parts.push(dupPart(p.sz, p.sides[i], p.prefix + '_' + p.sides[i], p.order));
-                boxes.push(partBounds(parts[i]));
-            }
-            var bb = unionBounds(boxes);
+        // Duplicate a part and move it so its cut outline's top-left lands at its
+        // layout position in its sheet.
+        function buildPart(p) {
+            var d  = p.data;
+            var g  = dupPart(d.sz, d.side, d.prefix + '_' + d.side, d.order);
+            var bb = partBounds(g);
             var r  = grid.rect(p.sheet);
-            var dx = (r[0] + (u(SHEET_W) - bb.width) / 2) - bb.left;
-            var dy = (r[1] - u(p.offset)) - bb.top;
-            // Each part is the _FINAL clip group; its parent is the _OUTLINE+_FINAL
-            // instance group. Moving the parent translates outline and design together.
-            for (var j = 0; j < parts.length; j++) {
-                var ig = parts[j].parent;
-                ig.position = [ig.position[0] + dx, ig.position[1] + dy];
-            }
+            var dx = (r[0] + u(p.x)) - bb.left;
+            var dy = (r[1] - u(p.y)) - bb.top;
+            // g is the _FINAL clip group; its parent is the _OUTLINE+_FINAL instance
+            // group. Moving the parent translates outline and design together.
+            var ig = g.parent;
+            ig.position = [ig.position[0] + dx, ig.position[1] + dy];
         }
 
-        for (var i = 0; i < pagePlacements.length; i++) buildProduct(pagePlacements[i]);
+        for (var i = 0; i < pagePlacements.length; i++) buildPart(pagePlacements[i]);
 
         // One fixed-size artboard per sheet on this page.
         for (var i = 0; i < sheets.length; i++) {
