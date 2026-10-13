@@ -229,3 +229,33 @@ test('quantityBySize throws on a Số lượng that is not a whole number', func
         assert.throws(() => quantityBySize(orders, ['M']), bad);
     }
 });
+
+test('parseOrders reads FORM; hasFemaleForm is true only when a row is NỮ', function () {
+    const { parseOrders, hasFemaleForm } = makePrintEnv();
+    const mixed = parseOrders(csv([
+        ['SIZE', 'SỐ', 'FORM'],
+        ['m', '1', 'NỮ'],
+        ['l', '2', '']
+    ]));
+    assert.equal(mixed[0].form, 'NỮ');
+    assert.equal(hasFemaleForm(mixed), true);
+
+    const blank = parseOrders(csv([['SIZE', 'SỐ', 'FORM'], ['m', '1', '']]));
+    assert.equal(hasFemaleForm(blank), false);
+
+    const noColumn = parseOrders(csv([['SIZE', 'SỐ'], ['m', '1']]));
+    assert.equal(noColumn[0].form, '');
+    assert.equal(hasFemaleForm(noColumn), false);
+});
+
+test('filterByForm keeps the NỮ rows for NỮ and the rest for NAM', function () {
+    const { parseOrders, filterByForm } = makePrintEnv();
+    const orders = parseOrders(csv([
+        ['SIZE', 'SỐ', 'FORM'],
+        ['m', '1', 'NỮ'],
+        ['l', '2', ''],
+        ['s', '3', 'nữ']
+    ]));
+    assert.deepEqual(Array.from(filterByForm(orders, true)).map(function (o) { return o.number; }), ['1', '3']);
+    assert.deepEqual(Array.from(filterByForm(orders, false)).map(function (o) { return o.number; }), ['2']);
+});

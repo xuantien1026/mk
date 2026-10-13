@@ -67,10 +67,11 @@ function parseOrders(text) {
     var rows = parseCsv(text);
 
     var HDR_SIZE = 'size', HDR_SO = 'so', HDR_TEN_TREN = 'ten tren so', HDR_TEN_DUOI = 'ten duoi so', HDR_VARIANT = 'mau',
-        HDR_QUANTITY = 'so luong';
-    var headerRow = -1, sizeCol = -1, soCol = -1, tenTrenCol = -1, tenDuoiCol = -1, variantCol = -1, quantityCol = -1;
+        HDR_QUANTITY = 'so luong', HDR_FORM = 'form';
+    var headerRow = -1, sizeCol = -1, soCol = -1, tenTrenCol = -1, tenDuoiCol = -1, variantCol = -1, quantityCol = -1,
+        formCol = -1;
     for (var r = 0; r < rows.length && headerRow === -1; r++) {
-        var sCol = -1, nCol = -1, ttCol = -1, tdCol = -1, vCol = -1, qCol = -1;
+        var sCol = -1, nCol = -1, ttCol = -1, tdCol = -1, vCol = -1, qCol = -1, fCol = -1;
         for (var c = 0; c < rows[r].length; c++) {
             var key = foldAscii(rows[r][c]);
             if      (key === HDR_SIZE)     sCol  = c;
@@ -79,10 +80,11 @@ function parseOrders(text) {
             else if (key === HDR_TEN_DUOI) tdCol = c;
             else if (key === HDR_VARIANT)  vCol  = c;
             else if (key === HDR_QUANTITY) qCol  = c;
+            else if (key === HDR_FORM)     fCol  = c;
         }
         if (sCol !== -1 && nCol !== -1) {
             headerRow = r; sizeCol = sCol; soCol = nCol; tenTrenCol = ttCol; tenDuoiCol = tdCol; variantCol = vCol;
-            quantityCol = qCol;
+            quantityCol = qCol; formCol = fCol;
         }
     }
     if (headerRow === -1) throw new Error('Khong tim thay bang du lieu (thieu cot SIZE / SO) trong file CSV.');
@@ -97,7 +99,8 @@ function parseOrders(text) {
             nameAbove: tenTrenCol !== -1 ? trimCell(rows[r], tenTrenCol) : '',
             nameBelow: tenDuoiCol !== -1 ? trimCell(rows[r], tenDuoiCol) : '',
             variant:   variantCol !== -1 ? trimCell(rows[r], variantCol) : '',
-            quantity:  quantityCol !== -1 ? trimCell(rows[r], quantityCol) : ''
+            quantity:  quantityCol !== -1 ? trimCell(rows[r], quantityCol) : '',
+            form:      formCol !== -1 ? trimCell(rows[r], formCol) : ''
         });
     }
     return orders;
@@ -117,6 +120,24 @@ function distinctVariant(orders) {
 function filterByVariant(orders, chosen) {
     var out = [];
     for (var i = 0; i < orders.length; i++) if (orders[i].variant === chosen) out.push(orders[i]);
+    return out;
+}
+
+// FORM is blank (NAM) or NỮ, matched case/accent insensitively.
+function isFemaleForm(order) {
+    return foldAscii(order.form) === 'nu';
+}
+
+// Whether any order is FORM NỮ — only then is there a NAM / NỮ choice to make.
+function hasFemaleForm(orders) {
+    for (var i = 0; i < orders.length; i++) if (isFemaleForm(orders[i])) return true;
+    return false;
+}
+
+// Keep only the NỮ orders (female true) or only the rest, i.e. NAM (female false).
+function filterByForm(orders, female) {
+    var out = [];
+    for (var i = 0; i < orders.length; i++) if (isFemaleForm(orders[i]) === female) out.push(orders[i]);
     return out;
 }
 

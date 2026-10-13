@@ -37,7 +37,7 @@ function applyField(container, fieldName, value, maxW) {
 
 // Everything a print run needs before building: the sizes Step 1 prepared in sourceDoc,
 // the Large Canvas template (in scriptDir/lib), and the chosen CSV's rows — only the
-// chosen Mẫu's when it mixes several. Alerts and returns null when something is
+// chosen FORM's when it has NỮ rows, and only the chosen Mẫu's when it mixes several. Alerts and returns null when something is
 // missing; null too when the person cancels. Returns { sizes, template, rows }.
 function readPrintRun(sourceDoc, scriptDir) {
     var sizes = detectPreparedSizes(sourceDoc);
@@ -62,6 +62,15 @@ function readPrintRun(sourceDoc, scriptDir) {
 
     var rows = parsePrintCommand(file);
     if (rows.length === 0) { alert('Khong tim thay dong du lieu nao trong file.'); return null; }
+
+    // If the CSV has FORM NỮ rows, ask NAM or NỮ and keep only those rows (NAM = the
+    // rest). Done before Mẫu so the Mẫu choice only lists the chosen form's values.
+    if (hasFemaleForm(rows)) {
+        var female = selectForm();
+        if (female == null) return null; // cancelled
+        rows = filterByForm(rows, female);
+        if (rows.length === 0) { alert('Khong co dong du lieu nao cho form da chon.'); return null; }
+    }
 
     // If the CSV mixes several Mẫu, ask which one to print and keep only its rows.
     // A single distinct value (incl. no Mẫu column / all blank) needs no prompt.
