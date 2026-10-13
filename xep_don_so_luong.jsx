@@ -21,7 +21,8 @@
 // size (1 when blank). Every piece's parts are nested together in one go, as
 // xep_toi_uu.jsx does (every piece of a size is the same, so the Step-1 parts are all
 // the nester needs), then the print pages are built straight into that layout, with SO,
-// TEN_TREN and TEN_DUOI removed. The run is recorded to debug/last_nest/.
+// TEN_TREN and TEN_DUOI removed. Optionally, every shirt and sleeve is placed before
+// the pants (a checkbox next to the time). The run is recorded to debug/last_nest/.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
 
@@ -61,13 +62,12 @@ function main() {
     if (!items.length) { alert('Khong co don hang nao khop size da chuan bi.'); return; }
     for (var i = 0; i < items.length; i++) checkFits({ width: items[i].w, height: items[i].h }, items[i].label);
 
-    var options = askNestOptions([]); // no shirts-first checkbox here
+    var options = askNestOptions(items);
     if (options === null) return;
-    var timeLimit = options.timeLimit;
 
     var recorder = nestRecorder(SCRIPT_DIR);
     recorder.save('before.json', function () { return recordedParts(items, scale); });
-    var layout = layoutNest(items, scale, timeLimit, SCRIPT_DIR, recorder);
+    var layout = layoutNest(items, scale, options.timeLimit, SCRIPT_DIR, recorder, options.shirtsFirst);
     var docs = buildLayoutPages(sourceDoc, run.template, layout);
     recorder.save('after.json', function () {
         return recordedPlacements(layout, docs[0].scaleFactor, function (p) { return p; });
