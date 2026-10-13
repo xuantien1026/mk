@@ -94,53 +94,61 @@ test('a pair’s second part skips earlier sheets with room', function () {
     assert.equal(layout.placements[2].sheet, 1);
 });
 
-// Every order's pant pieces (P1, P2) placed last.
+// Every order's pant pieces (P1, P2) placed last: stage 1, the rest stage 0.
 function pantsJob(orders) {
     const job = pairedJob(orders);
-    job.pants = job.parts.map((_, i) => i).filter((i) => job.parts[i].shape[0] === 'P');
+    job.stages = job.parts.map((p) => (p.shape[0] === 'P' ? 1 : 0));
     return job;
 }
 
-function assertPantsLast(job, genes) {
-    const firstPant = genes.findIndex((x) => job.pants.includes(x.part));
-    assert.ok(genes.slice(firstPant).every((x) => job.pants.includes(x.part)), 'no shirt part after a pant');
+function assertInStages(job, genes) {
+    const order = genes.map((x) => job.stages[x.part]);
+    assert.ok(order.every((s, i) => i === 0 || order[i - 1] <= s), 'parts in stage order');
 }
 
-test('seeds, crossover and mutation keep the pants after every shirt part, and pairs together', function () {
+test('seeds, crossover and mutation keep the parts in stage order, and pairs together', function () {
     const job = pantsJob(4);
-    const partner = partnersOf(job), pants = new Set(job.pants);
+    // Size by size too: orders 0-1 one size, 2-3 the next (8 parts per order).
+    job.stages = job.stages.map((s, i) => (i < 16 ? 0 : 2) + s);
+    const partner = partnersOf(job), stages = job.stages;
     const random = makeRandom(13);
     const all = job.parts.map((_, i) => i);
-    const initial = seeds(job.parts, (i) => i, [0, 180], partner, pants);
-    for (const genes of initial) { assertPantsLast(job, genes); assertPairsAdjacent(job, genes); }
+    const initial = seeds(job.parts, (i) => i, [0, 180], partner, stages);
+    for (const genes of initial) { assertInStages(job, genes); assertPairsAdjacent(job, genes); }
     for (let k = 0; k < 200; k++) {
         const [a, b] = [initial[k % 3], initial[(k + 1) % 3]];
-        const child = mutate(crossover(a, b, random, partner, pants), job.parts, 0.3, [0, 180], random, partner, pants);
+        const child = mutate(crossover(a, b, random, partner, stages), job.parts, 0.3, [0, 180], random, partner, stages);
         assert.deepEqual(partsOf(child), all);
-        assertPantsLast(job, child);
+        assertInStages(job, child);
         assertPairsAdjacent(job, child);
     }
 });
 
-test('the search puts no pant on a sheet before the last shirt part', async function () {
+test('the search puts no part on a sheet before the last sheet of an earlier stage', async function () {
     const job = pantsJob(6);
     const result = await nest(job, { threads: 0, timeLimitMs: 1000, seed: 3 });
     assertValidResult(job, result);
-    const pants = new Set(job.pants);
-    const lastShirt = Math.max(...result.placements.filter((p) => !pants.has(p.part)).map((p) => p.sheet));
-    assert.ok(result.placements.filter((p) => pants.has(p.part)).every((p) => p.sheet >= lastShirt));
+    const lastShirt = Math.max(...result.placements.filter((p) => job.stages[p.part] === 0).map((p) => p.sheet));
+    assert.ok(result.placements.filter((p) => job.stages[p.part] === 1).every((p) => p.sheet >= lastShirt));
 });
 
-test('a pant skips earlier sheets with room, but may share the last shirt sheet', function () {
+test('a later stage skips earlier sheets with room, but may share the last one', function () {
     const job = { sheet: { w: 100 * CM, h: 100 * CM }, gap: GAP,
                   shapes: { BIG: sleeve(95, 70), SMALL: sleeve(20, 20) },
-                  parts: [{ shape: 'BIG' }, { shape: 'BIG' }, { shape: 'SMALL' }, { shape: 'SMALL' }] };
-    const genes = [0, 1, 2, 3].map((part) => ({ part, rot: 0 }));
+                  parts: [{ shape: 'BIG' }, { shape: 'BIG' }, { shape: 'SMALL' }, { shape: 'SMALL' }, { shape: 'SMALL' }] };
+    const genes = [0, 1, 2, 3, 4].map((part) => ({ part, rot: 0 }));
     assert.equal(placeAll(createContext(job), genes).placements[3].sheet, 0);
-    job.pants = [3];
+    job.stages = [0, 0, 0, 1, 2];
     const layout = placeAll(createContext(job), genes);
-    assert.equal(layout.placements[2].sheet, 0, 'a shirt part still fills earlier gaps');
+    assert.equal(layout.placements[2].sheet, 0, 'a part still fills earlier gaps within its stage');
     assert.equal(layout.placements[3].sheet, 1);
+    assert.equal(layout.placements[4].sheet, 1, "shares the previous stage's last sheet");
+});
+
+test('job.stages must have one stage per part', function () {
+    const job = mixJob(1);
+    job.stages = [0, 1];
+    assert.throws(() => createContext(job), /one stage per part/);
 });
 
 test('upright-only jobs never get turned', function () {

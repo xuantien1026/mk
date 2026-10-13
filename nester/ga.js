@@ -7,10 +7,10 @@
 // the other (either first): a shirt's front and back, when the front carries its
 // number. Every candidate keeps each pair as neighbours — see keepPairs.
 //
-// job.pants ([part, ...]) are parts placed after all the others: the pants, when the
-// user wants every shirt and sleeve first. Every candidate has them last — see
-// pantsLast.
-const { partnersOf, pantsOf } = require('./pairs');
+// job.stages (one number per part) orders the parts in stages: the pants after every
+// shirt and sleeve, and/or size by size, when the user wants that. Every candidate has
+// its parts in stage order — see inStages.
+const { partnersOf, stagesOf } = require('./pairs');
 
 // Small seeded PRNG (mulberry32), so a run is reproducible.
 function makeRandom(seed) {
@@ -40,16 +40,18 @@ function keepPairs(genes, partner) {
     return out;
 }
 
-// genes with the pants moved to the end. Each group keeps its order.
-function pantsLast(genes, pants) {
-    if (!pants) return genes;
-    return genes.filter((x) => !pants.has(x.part)).concat(genes.filter((x) => pants.has(x.part)));
+// genes sorted by stage. Within a stage they keep their order.
+function inStages(genes, stages) {
+    if (!stages) return genes;
+    return genes.map((x, i) => [x, i])
+        .sort((a, b) => stages[a[0].part] - stages[b[0].part] || a[1] - b[1])
+        .map(([x]) => x);
 }
 
-// genes made to keep the job's order constraints. Pairs are a shirt's parts, so never
-// span the pants.
-function arrange(genes, partner, pants) {
-    return pantsLast(keepPairs(genes, partner), pants);
+// genes made to keep the job's order constraints. Pairs are a shirt's front and back,
+// so never span two stages.
+function arrange(genes, partner, stages) {
+    return inStages(keepPairs(genes, partner), stages);
 }
 
 // genes (pairs already neighbours) cut into units: a pair, or a single part.
@@ -70,7 +72,7 @@ function unitsOf(genes, partner) {
 //  - largest part first, all upright;
 //  - largest first, every other copy of a shape turned 180° (head-to-toe pairs);
 //  - the job's own order (engine 1's sequence), all upright.
-function seeds(parts, areaOf, rotations, partner = null, pants = null) {
+function seeds(parts, areaOf, rotations, partner = null, stages = null) {
     const idx = parts.map((_, i) => i);
     const bySize = idx.slice().sort((a, b) => areaOf(b) - areaOf(a) || a - b);
     const turn = rotations.includes(180);
@@ -83,14 +85,14 @@ function seeds(parts, areaOf, rotations, partner = null, pants = null) {
         bySize.map((part) => ({ part, rot: 0 })),
         alternating,
         idx.map((part) => ({ part, rot: 0 }))
-    ].map((genes) => arrange(genes, partner, pants));
+    ].map((genes) => arrange(genes, partner, stages));
 }
 
 // Swap neighbours / flip rotations, each with probability rate. A pair moves as one
 // unit, and may also swap which of its two goes first. Swapping two copies of the same
-// shape and rotation changes nothing, so those swaps are skipped; a swap of the last
-// shirt part with the first pant is undone by pantsLast.
-function mutate(genes, parts, rate, rotations, random, partner = null, pants = null) {
+// shape and rotation changes nothing, so those swaps are skipped; a swap across two
+// stages is undone by inStages.
+function mutate(genes, parts, rate, rotations, random, partner = null, stages = null) {
     const units = unitsOf(genes.map((x) => ({ part: x.part, rot: x.rot })), partner);
     for (let i = 0; i < units.length; i++) {
         if (i + 1 < units.length && random() < rate) {
@@ -101,7 +103,7 @@ function mutate(genes, parts, rate, rotations, random, partner = null, pants = n
         }
         if (units[i].length === 2 && random() < rate) units[i].reverse();
     }
-    const out = pantsLast([].concat(...units), pants);
+    const out = inStages([].concat(...units), stages);
     if (rotations.length > 1) {
         for (const x of out) if (random() < rate) x.rot = rotations[Math.floor(random() * rotations.length)];
     }
@@ -110,13 +112,13 @@ function mutate(genes, parts, rate, rotations, random, partner = null, pants = n
 
 // Single-point order crossover: the child takes p1's genes up to the cut, then the
 // remaining parts in p2's order (with p2's rotations); a pair the cut splits is joined
-// up again, and the pants put back last.
-function crossover(p1, p2, random, partner = null, pants = null) {
+// up again, and the stages put back in order.
+function crossover(p1, p2, random, partner = null, stages = null) {
     const cut = Math.round(Math.min(Math.max(random(), 0.1), 0.9) * (p1.length - 1));
     const child = p1.slice(0, cut).map((x) => ({ part: x.part, rot: x.rot }));
     const taken = new Set(child.map((x) => x.part));
     for (const x of p2) if (!taken.has(x.part)) child.push({ part: x.part, rot: x.rot });
-    return arrange(child, partner, pants);
+    return arrange(child, partner, stages);
 }
 
 // Pick a parent, favouring better-ranked ones (population sorted best first).
@@ -145,7 +147,7 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
                              patience = 200, seed = 1, onProgress } = {}) {
     const random = makeRandom(seed);
     const rotations = job.rotations || [0, 180];
-    const partner = partnersOf(job), pants = pantsOf(job);
+    const partner = partnersOf(job), stages = stagesOf(job);
     const start = Date.now();
     let evaluations = 0;
 
@@ -155,9 +157,9 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
         return results.map((r, i) => Object.assign({ genes: list[i] }, r));
     }
 
-    const initial = seeds(job.parts, areaOf, rotations, partner, pants);
+    const initial = seeds(job.parts, areaOf, rotations, partner, stages);
     const base = initial[1];
-    while (initial.length < populationSize) initial.push(mutate(base, job.parts, 0.3, rotations, random, partner, pants));
+    while (initial.length < populationSize) initial.push(mutate(base, job.parts, 0.3, rotations, random, partner, stages));
     let population = (await score(initial)).sort((a, b) => a.fitness - b.fitness);
     let best = population[0];
     let generation = 0, stale = 0;
@@ -169,8 +171,8 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
         while (children.length < populationSize - 1) {
             const p1 = pick(population, random);
             const p2 = pick(population, random, p1);
-            children.push(mutate(crossover(p1.genes, p2.genes, random, partner, pants), job.parts, mutationRate,
-                                 rotations, random, partner, pants));
+            children.push(mutate(crossover(p1.genes, p2.genes, random, partner, stages), job.parts, mutationRate,
+                                 rotations, random, partner, stages));
         }
         const scored = await score(children);
         population = [best].concat(scored).sort((a, b) => a.fitness - b.fitness); // elitism

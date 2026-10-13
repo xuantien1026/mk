@@ -1,6 +1,6 @@
 // Layout engine 2 from Illustrator: nest parts by their real outlines (nester/), turning
 // some 180°. Needs json.jsx, export_shapes.jsx, nester_bridge.jsx, sheet_layout.jsx,
-// names.jsx (SO), utils.jsx (findAllItemsByName).
+// names.jsx (SO), utils.jsx (findAllItemsByName), config.jsx (SIZES).
 
 // items: [{ key, outline, ... }] — one per part to print; key = {size}_{side} names its
 // shape, outline is its cut outline in a document whose units are 1/scale of real pt.
@@ -8,12 +8,13 @@
 // beforehand for a design with many sizes. Returns { sheets, placements: [{ sheet, x,
 // y, rot, data }] } like layoutSequential, with data the item and rot (0/180) to turn
 // the part about its center first. recorder (optional, see nest_record.jsx) gets the
-// nester's job and result. shirtsFirst: place every shirt and sleeve part before the
-// pants (see pantParts).
-function layoutNest(items, scale, timeLimit, root, recorder, shirtsFirst) {
+// nester's job and result. options: { timeLimit, shirtsFirst, bySize } (see
+// askNestOptions and nestStages).
+function layoutNest(items, scale, root, recorder, options) {
+    var timeLimit = options.timeLimit;
     var job = buildNestJob(items, scale, timeLimit);
     job.pairs = soPairs(items);
-    if (shirtsFirst) job.pants = pantParts(items);
+    job.stages = nestStages(items, options.shirtsFirst, options.bySize);
     if (recorder) recorder.save('job.json', function () { return job; });
 
     var win = new Window('palette', 'Xếp tối ưu');
@@ -65,13 +66,32 @@ function soPairs(items) {
     return pairs;
 }
 
+function isPantPart(item) {
+    return /PANT/.test(item.side);
+}
+
 // The pant parts (QUAN_*: sides LEFT_PANT, RIGHT_PANT_1, ...), as indices into items.
-// With these as the job's pants, the nester places them after every shirt part (front,
-// back, sleeves), never on an earlier sheet.
 function pantParts(items) {
     var pants = [];
-    for (var i = 0; i < items.length; i++) if (/PANT/.test(items[i].side)) pants.push(i);
+    for (var i = 0; i < items.length; i++) if (isPantPart(items[i])) pants.push(i);
     return pants;
+}
+
+// The job's stages (see nester/pairs.js): one number per item, and the nester places
+// the items stage by stage, a stage never on a sheet before the previous stage's last
+// one. shirtsFirst: every shirt part (front, back, sleeves) before the pants. bySize:
+// size by size, smallest first (SIZES). Both: each size's shirt parts, then its pants,
+// then the next size. Neither: null, no stages.
+function nestStages(items, shirtsFirst, bySize) {
+    if (!shirtsFirst && !bySize) return null;
+    var rank = {};
+    for (var s = 0; s < SIZES.length; s++) rank[SIZES[s]] = s;
+    var stages = [];
+    for (var i = 0; i < items.length; i++) {
+        var pant = shirtsFirst && isPantPart(items[i]) ? 1 : 0;
+        stages.push((bySize ? 2 * rank[items[i].sz] : 0) + pant);
+    }
+    return stages;
 }
 
 // The nester's result (see nester/index.js) as a layout, sheets from makeSheet.

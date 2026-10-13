@@ -2,11 +2,14 @@
 // config.jsx, utils.jsx, names.jsx, sheet_layout.jsx, json.jsx, export_shapes.jsx,
 // nester_bridge.jsx, layout_nest.jsx, output_parts.jsx, nest_record.jsx.
 
-// Ask how long the nester may search, in seconds, and — when items (nestableParts) mix
-// shirt and pant parts — whether to place every shirt and sleeve before the pants.
-// Returns { timeLimit, shirtsFirst }, or null when cancelled or invalid.
+// Ask how long the nester may search, in seconds; when items (nestableParts) mix shirt
+// and pant parts, whether to place every shirt and sleeve before the pants; and when
+// they have several sizes, whether to place them size by size (see nestStages).
+// Returns { timeLimit, shirtsFirst, bySize }, or null when cancelled or invalid.
 function askNestOptions(items) {
     var pants = pantParts(items).length;
+    var sizes = {}, sizeCount = 0;
+    for (var i = 0; i < items.length; i++) if (!sizes[items[i].sz]) { sizes[items[i].sz] = true; sizeCount++; }
     var win = new Window('dialog', 'Xếp tối ưu');
     win.alignChildren = 'fill';
     win.add('statictext', undefined, 'Thời gian tìm cách xếp tối ưu (giây). Nhiều size có thể mất thêm vài phút '
@@ -18,6 +21,12 @@ function askNestOptions(items) {
         shirtsFirst = win.add('checkbox', undefined, 'Xếp hết áo và tay áo trước quần');
         shirtsFirst.helpTip = 'Quần chỉ được xếp sau tất cả áo và tay áo (có thể chung tấm in cuối cùng của áo).';
     }
+    var bySize = null;
+    if (sizeCount > 1) {
+        bySize = win.add('checkbox', undefined, 'Xếp lần lượt từng size, từ nhỏ đến lớn');
+        bySize.helpTip = 'Xếp hết các chi tiết của một size rồi mới đến size tiếp theo (có thể chung tấm in cuối '
+            + 'cùng của size trước). Chọn cùng "áo trước quần": mỗi size xếp áo rồi đến quần.';
+    }
     var buttons = win.add('group');
     buttons.alignment = 'right';
     buttons.add('button', undefined, 'OK', { name: 'ok' });
@@ -26,7 +35,8 @@ function askNestOptions(items) {
 
     var timeLimit = parseInt(time.text, 10);
     if (!(timeLimit > 0)) { alert('Thời gian không hợp lệ.'); return null; }
-    return { timeLimit: timeLimit, shirtsFirst: shirtsFirst !== null && shirtsFirst.value };
+    return { timeLimit: timeLimit, shirtsFirst: shirtsFirst !== null && shirtsFirst.value,
+             bySize: bySize !== null && bySize.value };
 }
 
 // The printed parts of a print page (doc), each checked to fit a sheet.
@@ -37,15 +47,15 @@ function nestableParts(doc) {
 }
 
 // Nest the parts items (nestableParts) of print page doc onto as few sheets as the
-// nester finds in timeLimit seconds, rearranging doc in place. Records the run to
-// root/debug/last_nest/ (nest_record.jsx). shirtsFirst: see layoutNest. Returns
-// { before, after } sheet counts.
-function nestPage(doc, items, timeLimit, root, shirtsFirst) {
+// nester finds in options.timeLimit seconds, rearranging doc in place. Records the run to
+// root/debug/last_nest/ (nest_record.jsx). options: askNestOptions's, see layoutNest.
+// Returns { before, after } sheet counts.
+function nestPage(doc, items, root, options) {
     var scale = doc.scaleFactor || 1;
     var before = doc.artboards.length;
     var recorder = nestRecorder(root);
     recorder.save('before.json', function () { return recordedParts(items, scale); });
-    var layout = layoutNest(items, scale, timeLimit, root, recorder, shirtsFirst);
+    var layout = layoutNest(items, scale, root, recorder, options);
     applyLayout(doc, layout, scale);
     recorder.save('after.json', function () {
         return recordedPlacements(layout, scale, function (p) {

@@ -35,6 +35,17 @@ test('pantParts picks out every pant side', function () {
     assert.deepEqual(Array.from(env.pantParts(items)), [1, 5, 6, 7, 8, 9]);
 });
 
+test('nestStages: pants after shirts, size by size, or each size’s shirts then its pants', function () {
+    const env = makeNestEnv();
+    const items = [['M', 'FRONT'], ['S', 'LEFT_PANT'], ['S', 'BACK'], ['M', 'RIGHT_PANT_1'], ['XL', 'LEFT_SLEEVE']]
+        .map(([sz, side]) => ({ sz, side }));
+    const S = 2 * 9, M = 2 * 10, XL = 2 * 12; // SIZES indices, doubled
+    assert.equal(env.nestStages(items, false, false), null);
+    assert.deepEqual(Array.from(env.nestStages(items, true, false)), [0, 1, 0, 1, 0]);
+    assert.deepEqual(Array.from(env.nestStages(items, false, true)), [M, S, S, M, XL]);
+    assert.deepEqual(Array.from(env.nestStages(items, true, true)), [M, S + 1, S, M + 1, XL]);
+});
+
 test('nestResultToLayout maps parts back to their items and sheets to the grid', function () {
     const env = makeNestEnv();
     env.SHEETS_PER_ROW = 2;

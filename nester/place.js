@@ -2,7 +2,7 @@
 // fixed-size sheets using no-fit polygons. One call = one candidate layout; the genetic
 // algorithm (ga.js) searches over orders and rotations.
 const g = require('./geometry');
-const { partnersOf, pantsOf } = require('./pairs');
+const { partnersOf, stagesOf } = require('./pairs');
 
 // Everything placement needs about a job, computed once: each (shape, rotation) as a
 // prepared polygon, and a shared NFP cache.
@@ -25,7 +25,7 @@ function createContext(job, opts = {}) {
         sheetW: g.ptToUnits(job.sheet.w) + gap,
         sheetH: g.ptToUnits(job.sheet.h) + gap,
         partner: partnersOf(job),
-        pants: pantsOf(job),
+        stages: stagesOf(job),
         nfpCache: new Map()
     };
 }
@@ -85,8 +85,9 @@ function findPosition(ctx, sheet, key) {
 // Place genes [{ part, rot }] in order. Each part goes onto the earliest sheet it fits
 // on; a new sheet is opened only when none has room. A part placed right after its pair
 // partner (job.pairs) starts looking at its partner's sheet, so it never lands on an
-// earlier one. A pant (job.pants) starts looking at the last sheet holding a non-pant
-// part, so the pants come after every shirt and sleeve (sharing that one sheet).
+// earlier one. With job.stages (genes in stage order), the first part of a stage — and
+// every part after it — starts looking at the last sheet used so far, so a stage comes
+// after every earlier one (sharing that one sheet).
 // Returns { sheets, placements: [{ part, sheet, x, y, rot }] (units, grown frame),
 // fitness } — fitness = sheets used, plus the fraction of the last sheet's length used
 // (lower is better).
@@ -94,14 +95,16 @@ function placeAll(ctx, genes) {
     const sheets = [];
     const placements = [];
     const sheetArea = ctx.sheetW * ctx.sheetH;
-    let lastShirtSheet = 0;
+    let stage = null, stageFrom = 0;
     for (const gene of genes) {
         const key = ctx.job.parts[gene.part].shape + '@' + gene.rot;
         const s = ctx.shapes[key];
         const prev = placements[placements.length - 1];
-        const pant = ctx.pants !== null && ctx.pants.has(gene.part);
-        let from = ctx.partner && prev && ctx.partner.get(gene.part) === prev.part ? prev.sheet : 0;
-        if (pant) from = Math.max(from, lastShirtSheet);
+        if (ctx.stages && ctx.stages[gene.part] !== stage) {
+            stage = ctx.stages[gene.part];
+            stageFrom = Math.max(0, sheets.length - 1);
+        }
+        let from = ctx.partner && prev && ctx.partner.get(gene.part) === prev.part ? prev.sheet : stageFrom;
         let pos = null, sheet = null;
         for (let i = from; i < sheets.length; i++) {
             const sh = sheets[i];
@@ -118,7 +121,6 @@ function placeAll(ctx, genes) {
         sheet.placed.push({ key, x: pos.x, y: pos.y });
         sheet.usedArea += s.area;
         sheet.maxY = Math.max(sheet.maxY, pos.y + s.h);
-        if (!pant) lastShirtSheet = Math.max(lastShirtSheet, sheet.index);
         placements.push({ part: gene.part, sheet: sheet.index, x: pos.x, y: pos.y, rot: gene.rot });
     }
     const last = sheets[sheets.length - 1];

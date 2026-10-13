@@ -22,7 +22,7 @@
 // xep_toi_uu.jsx does (every piece of a size is the same, so the Step-1 parts are all
 // the nester needs), then the print page is built straight into that layout, with SO,
 // TEN_TREN and TEN_DUOI removed. Optionally, every shirt and sleeve is placed before
-// the pants (a checkbox next to the time). The run is recorded to debug/last_nest/.
+// the pants, and/or size by size (checkboxes next to the time). The run is recorded to debug/last_nest/.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
 
@@ -67,7 +67,7 @@ function main() {
 
     var recorder = nestRecorder(SCRIPT_DIR);
     recorder.save('before.json', function () { return recordedParts(items, scale); });
-    var layout = layoutNest(items, scale, options.timeLimit, SCRIPT_DIR, recorder, options.shirtsFirst);
+    var layout = layoutNest(items, scale, SCRIPT_DIR, recorder, options);
     var doc = buildLayoutPage(sourceDoc, run.template, layout);
     recorder.save('after.json', function () {
         return recordedPlacements(layout, doc.scaleFactor, function (p) { return p; });

@@ -16,8 +16,8 @@
 // 500cm sheets as the nester (nester/, needs Node.js and `npm install`) finds in the
 // time given. A shirt whose front has its number (SO) gets its front and back placed
 // one right after the other. Optionally, every shirt and sleeve is placed before the
-// pants (a checkbox next to the time). Rearranges the page in place; close it without
-// saving to undo. Each run is recorded to debug/last_nest/ (see lib/nest_record.jsx).
+// pants, and/or size by size, smallest first (checkboxes next to the time). Rearranges
+// the page in place; close it without saving to undo. Each run is recorded to debug/last_nest/ (see lib/nest_record.jsx).
 // xep_don_so_luong.jsx lays out its pieces with the same engine by itself.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
@@ -30,7 +30,7 @@ function main() {
     var options = askNestOptions(items);
     if (options === null) return;
 
-    var nested = nestPage(doc, items, options.timeLimit, SCRIPT_DIR, options.shirtsFirst);
+    var nested = nestPage(doc, items, SCRIPT_DIR, options);
     alert('Đã xếp lại ' + items.length + ' chi tiết: ' + nested.before + ' → ' + nested.after + ' tấm in.');
 }
 
