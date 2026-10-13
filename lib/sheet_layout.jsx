@@ -5,14 +5,16 @@
 // Every sheet (artboard) is a fixed 159cm × 500cm. All sizes here are REAL sizes, in pt.
 var SHEET_W     = 159 * 10 * PT_PER_MM;
 var SHEET_H     = 500 * 10 * PT_PER_MM;
-var SHEET_GAP   = 100;               // gap between sheets on a page
+var SHEET_GAP   = 100;               // gap between sheets in the print page
 var PRODUCT_GAP = 4 * PT_PER_MM;     // 5mm between products / parts in a sheet
 
-// Sheets per output document, as a grid: SHEETS_PER_ROW across × SHEET_ROWS down.
-// A normal Illustrator canvas (max ~578cm) only holds 3 sheets, so every output document
-// is a copy of a Large Canvas template (up to ~57m). 12 sheets ≈ 10m × 10m.
+// The print page (the one output document) holds every sheet, in a grid SHEETS_PER_ROW
+// across and as many rows down as needed. A normal Illustrator canvas (max ~578cm) only
+// holds 3 sheets, so the print page is a copy of a Large Canvas template: its canvas is
+// CANVAS_SIZE document units square (~57m real), room for about 11 rows (66 sheets).
 var SHEETS_PER_ROW = 6;
-var SHEET_ROWS     = 2;
+var CANVAS_SIZE    = 16383;
+var CANVAS_MARGIN  = 100 * 10 * PT_PER_MM; // real pt kept clear around the grid
 
 // Union of several { left, top, width, height } boxes into one bounding box.
 function unionBounds(boxes) {
@@ -60,13 +62,10 @@ function productLayout(boxes) {
     return { width: width, height: y + rowH, pos: pos };
 }
 
-// The n-th sheet (0-based) of a layout. Sheets fill a page's grid row by row; a full page
-// starts a new page (output document).
+// The n-th sheet (0-based) of a layout and where it goes in the print page's grid: rows
+// of SHEETS_PER_ROW, top to bottom.
 function makeSheet(n) {
-    var perPage = SHEETS_PER_ROW * SHEET_ROWS;
-    var slot    = n % perPage;
-    return { index: n, page: Math.floor(n / perPage) + 1,
-             col: slot % SHEETS_PER_ROW, row: Math.floor(slot / SHEETS_PER_ROW) };
+    return { index: n, col: n % SHEETS_PER_ROW, row: Math.floor(n / SHEETS_PER_ROW) };
 }
 
 // Packs products into sheets, in order (nhap_ten_so.jsx). Products stack top to bottom
@@ -90,18 +89,26 @@ function createSheetPacker() {
             var slot = { sheet: sheet, offset: sheet.used + gap };
             sheet.used += gap + h;
             return slot;
-        },
-        pageCount: function () { return sheet ? sheet.page : 0; }
+        }
     };
 }
 
-// Where each sheet sits in a page document, in that document's units (real pt divided
-// by its scale factor). The grid is centered on the template artboard abRect
-// ([left, top, right, bottom]) — the canvas is centered on it, so the grid stays well
-// inside the canvas. rect(sheet) returns the sheet's artboard rect.
-function sheetGrid(abRect, scale) {
-    var w = (SHEETS_PER_ROW * SHEET_W + (SHEETS_PER_ROW - 1) * SHEET_GAP) / scale;
-    var h = (SHEET_ROWS     * SHEET_H + (SHEET_ROWS     - 1) * SHEET_GAP) / scale;
+// Where each of count sheets sits in the print page, in its units (real pt divided by
+// its scale factor). The grid is centered on the template artboard abRect ([left, top,
+// right, bottom]) — the canvas is centered on it, so the grid stays inside the canvas.
+// Throws when count sheets need more rows than the canvas holds. rect(sheet) returns
+// the sheet's artboard rect.
+function sheetGrid(abRect, scale, count) {
+    var cols = Math.min(Math.max(count, 1), SHEETS_PER_ROW);
+    var rows = Math.max(Math.ceil(count / SHEETS_PER_ROW), 1);
+    var room = CANVAS_SIZE * scale - 2 * CANVAS_MARGIN; // real pt
+    var maxRows = Math.floor((room + SHEET_GAP) / (SHEET_H + SHEET_GAP));
+    if (rows > maxRows) {
+        throw new Error('Cần ' + count + ' tấm in, vượt quá kích thước file Large Canvas (tối đa '
+            + maxRows * SHEETS_PER_ROW + ' tấm).');
+    }
+    var w = (cols * SHEET_W + (cols - 1) * SHEET_GAP) / scale;
+    var h = (rows * SHEET_H + (rows - 1) * SHEET_GAP) / scale;
     return sheetGridAt((abRect[0] + abRect[2]) / 2 - w / 2, (abRect[1] + abRect[3]) / 2 + h / 2, scale);
 }
 

@@ -18,7 +18,7 @@
 // one right after the other. Optionally, every shirt and sleeve is placed before the
 // pants (a checkbox next to the time). Rearranges the page in place; close it without
 // saving to undo. Each run is recorded to debug/last_nest/ (see lib/nest_record.jsx).
-// xep_don_so_luong.jsx runs this on its pages by itself.
+// xep_don_so_luong.jsx lays out its pieces with the same engine by itself.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
 

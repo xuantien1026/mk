@@ -89,7 +89,7 @@ test('readOutputParts measures real sizes; applyLayout moves, turns and re-sheet
     assert.deepEqual(Array.from(items, (it) => it.label), ['M_1_FRONT', 'M_1_LEFT_PANT']);
     assert.deepEqual([items[0].key, items[0].w, items[0].h], ['M_FRONT', 500, 650]);
 
-    const sheets = [{ index: 0 }, { index: 1 }, { index: 2 }];
+    const sheets = [0, 1, 2].map((n) => env.makeSheet(n));
     env.applyLayout(doc, {
         sheets,
         placements: [{ sheet: sheets[2], x: 100, y: 200, rot: 180, data: items[1] },
@@ -106,10 +106,4 @@ test('readOutputParts measures real sizes; applyLayout moves, turns and re-sheet
 
     assert.deepEqual(Array.from(doc.artboards, (a) => a.name), ['13', '14', '15']);
     assert.deepEqual(Array.from(doc.artboards[2].artboardRect.slice(0, 2)), [1000 + 2 * col, 5000]);
-});
-
-test('sheets beyond one row continue on the rows below', function () {
-    const env = makeOutputEnv();
-    assert.deepEqual({ ...env.sheetSlot(env.SHEETS_PER_ROW + 1) }, { col: 1, row: 1 });
-    assert.deepEqual({ ...env.sheetSlot(2 * env.SHEETS_PER_ROW) }, { col: 0, row: 2 });
 });

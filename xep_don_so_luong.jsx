@@ -20,7 +20,7 @@
 // (CSV) in the same format as nhap_ten_so.jsx's: each row is Số lượng pieces of its
 // size (1 when blank). Every piece's parts are nested together in one go, as
 // xep_toi_uu.jsx does (every piece of a size is the same, so the Step-1 parts are all
-// the nester needs), then the print pages are built straight into that layout, with SO,
+// the nester needs), then the print page is built straight into that layout, with SO,
 // TEN_TREN and TEN_DUOI removed. Optionally, every shirt and sleeve is placed before
 // the pants (a checkbox next to the time). The run is recorded to debug/last_nest/.
 
@@ -68,13 +68,12 @@ function main() {
     var recorder = nestRecorder(SCRIPT_DIR);
     recorder.save('before.json', function () { return recordedParts(items, scale); });
     var layout = layoutNest(items, scale, options.timeLimit, SCRIPT_DIR, recorder, options.shirtsFirst);
-    var docs = buildLayoutPages(sourceDoc, run.template, layout);
+    var doc = buildLayoutPage(sourceDoc, run.template, layout);
     recorder.save('after.json', function () {
-        return recordedPlacements(layout, docs[0].scaleFactor, function (p) { return p; });
+        return recordedPlacements(layout, doc.scaleFactor, function (p) { return p; });
     });
 
-    alert('Hoàn thành! Đã xếp ' + items.length + ' chi tiết vào ' + layout.sheets.length + ' tấm in (159cm × 500cm), '
-        + docs.length + ' tài liệu.');
+    alert('Hoàn thành! Đã xếp ' + items.length + ' chi tiết vào ' + layout.sheets.length + ' tấm in (159cm × 500cm).');
 }
 
 try {

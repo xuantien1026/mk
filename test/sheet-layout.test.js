@@ -4,18 +4,17 @@ const { makeSheetEnv } = require('./helpers/helper');
 
 const CM = 10 * 2.83465;
 
-test('makeSheet fills a page row by row, then starts a new page', function () {
+test('makeSheet fills the grid row by row, as many rows as needed', function () {
     const env = makeSheetEnv();
     env.SHEETS_PER_ROW = 3;
-    env.SHEET_ROWS     = 2;
     const pos = [0, 1, 2, 3, 4, 5, 6].map(function (n) {
         const s = env.makeSheet(n);
-        return [s.index, s.page, s.row, s.col];
+        return [s.index, s.row, s.col];
     });
     assert.deepEqual(pos, [
-        [0, 1, 0, 0], [1, 1, 0, 1], [2, 1, 0, 2],
-        [3, 1, 1, 0], [4, 1, 1, 1], [5, 1, 1, 2],
-        [6, 2, 0, 0]
+        [0, 0, 0], [1, 0, 1], [2, 0, 2],
+        [3, 1, 0], [4, 1, 1], [5, 1, 2],
+        [6, 2, 0]
     ]);
 });
 
@@ -48,24 +47,13 @@ test('a product filling the rest of a sheet exactly still fits', function () {
     assert.equal(packer.sheets.length, 1);
 });
 
-test('sheets fill a page row by row, then start a new page', function () {
+test('packed sheets fill the grid row by row', function () {
     const env = makeSheetEnv();
     env.SHEETS_PER_ROW = 3;
-    env.SHEET_ROWS     = 2;
     const packer = env.createSheetPacker();
     for (let i = 0; i < 7; i++) packer.place(env.SHEET_H); // one full sheet each
-    const pos = Array.from(packer.sheets).map(function (s) { return [s.page, s.row, s.col]; });
-    assert.deepEqual(pos, [
-        [1, 0, 0], [1, 0, 1], [1, 0, 2],
-        [1, 1, 0], [1, 1, 1], [1, 1, 2],
-        [2, 0, 0]
-    ]);
-    assert.equal(packer.pageCount(), 2);
-});
-
-test('pageCount is 0 before anything is placed', function () {
-    const env = makeSheetEnv();
-    assert.equal(env.createSheetPacker().pageCount(), 0);
+    const pos = Array.from(packer.sheets).map(function (s) { return [s.row, s.col]; });
+    assert.deepEqual(pos, [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0]]);
 });
 
 test('unionBounds covers every box', function () {
@@ -87,9 +75,8 @@ test('checkFits rejects a block wider or taller than a sheet', function () {
 test('sheetGrid centers the grid on the artboard and scales to document units', function () {
     const env = makeSheetEnv();
     env.SHEETS_PER_ROW = 2;
-    env.SHEET_ROWS     = 1;
     const scale = 10;
-    const grid  = env.sheetGrid([0, 1000, 1000, 0], scale); // center (500, 500)
+    const grid  = env.sheetGrid([0, 1000, 1000, 0], scale, 2); // center (500, 500)
     const r0 = grid.rect({ col: 0, row: 0 });
     const r1 = grid.rect({ col: 1, row: 0 });
     const w = env.SHEET_W / scale, h = env.SHEET_H / scale, gap = env.SHEET_GAP / scale;
@@ -100,6 +87,28 @@ test('sheetGrid centers the grid on the artboard and scales to document units', 
     assert.ok(Math.abs((r0[1] - r0[3]) - h) < 1e-9);
     assert.ok(Math.abs(r1[0] - (r0[2] + gap)) < 1e-9);
     assert.ok(Math.abs((r1[2] + r0[0]) / 2 - 500) < 1e-9); // symmetric about the center
+});
+
+test('sheetGrid sizes the grid to the sheets: fewer than a row, and rows down', function () {
+    const env = makeSheetEnv();
+    const scale = 10;
+    const w = env.SHEET_W / scale, h = env.SHEET_H / scale, gap = env.SHEET_GAP / scale;
+    // One sheet: centered on its own.
+    const one = env.sheetGrid([0, 1000, 1000, 0], scale, 1).rect(env.makeSheet(0));
+    assert.ok(Math.abs((one[0] + one[2]) / 2 - 500) < 1e-9 && Math.abs((one[1] + one[3]) / 2 - 500) < 1e-9);
+    // Two rows (SHEETS_PER_ROW + 1 sheets): the grid's top and bottom are symmetric about y = 500.
+    const n = env.SHEETS_PER_ROW + 1, grid = env.sheetGrid([0, 1000, 1000, 0], scale, n);
+    const top = grid.rect(env.makeSheet(0))[1], bottom = grid.rect(env.makeSheet(n - 1))[3];
+    assert.ok(Math.abs(top - (500 + (2 * h + gap) / 2)) < 1e-9);
+    assert.ok(Math.abs(bottom - (500 - (2 * h + gap) / 2)) < 1e-9);
+    assert.ok(Math.abs(grid.rect(env.makeSheet(0))[0] - (500 - (env.SHEETS_PER_ROW * (w + gap) - gap) / 2)) < 1e-9);
+});
+
+test('sheetGrid holds about 11 rows of a Large Canvas and refuses more', function () {
+    const env = makeSheetEnv();
+    const perRow = env.SHEETS_PER_ROW;
+    env.sheetGrid([0, 1000, 1000, 0], 10, 11 * perRow);
+    assert.throws(() => env.sheetGrid([0, 1000, 1000, 0], 10, 11 * perRow + 1), /tối đa 66 tấm/);
 });
 
 test('sheetName zero-pads to at least two digits and to the total width', function () {

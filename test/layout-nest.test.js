@@ -35,10 +35,9 @@ test('pantParts picks out every pant side', function () {
     assert.deepEqual(Array.from(env.pantParts(items)), [1, 5, 6, 7, 8, 9]);
 });
 
-test('nestResultToLayout maps parts back to their items and sheets to the page grid', function () {
+test('nestResultToLayout maps parts back to their items and sheets to the grid', function () {
     const env = makeNestEnv();
     env.SHEETS_PER_ROW = 2;
-    env.SHEET_ROWS = 1;
     const items = [{ key: 'S_FRONT', id: 'a' }, { key: 'S_BACK', id: 'b' }, { key: 'S_FRONT', id: 'c' }];
     const layout = env.nestResultToLayout({
         sheets: 3,
@@ -46,7 +45,7 @@ test('nestResultToLayout maps parts back to their items and sheets to the page g
                      { part: 2, sheet: 1, x: 5, y: 6, rot: 0 }]
     }, items);
     assert.equal(layout.sheets.length, 3);
-    assert.deepEqual(Array.from(layout.sheets, (s) => [s.page, s.col]), [[1, 0], [1, 1], [2, 0]]);
+    assert.deepEqual(Array.from(layout.sheets, (s) => [s.row, s.col]), [[0, 0], [0, 1], [1, 0]]);
     const b = layout.placements[1];
     assert.equal(b.data, items[1]);
     assert.equal(b.sheet, layout.sheets[2]);

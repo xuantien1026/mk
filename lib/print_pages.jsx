@@ -1,4 +1,4 @@
-// Building the print pages from a print command (CSV), shared by nhap_ten_so.jsx and
+// Building the print page from a print command (CSV), shared by nhap_ten_so.jsx and
 // xep_don_so_luong.jsx. Needs names.jsx, config.jsx, utils.jsx, print_command.jsx,
 // print_dialogs.jsx, sheet_layout.jsx, step1_parts.jsx, large_canvas.jsx.
 
@@ -74,12 +74,11 @@ function readPrintRun(sourceDoc, scriptDir) {
     return { sizes: sizes, template: template, rows: rows };
 }
 
-// Build the print pages: every order of orders ({ size: [orders] }, sizes in sizes'
+// Build the print page: every order of orders ({ size: [orders] }, sizes in sizes'
 // order) gets a copy of each of its product's Step-1 parts from sourceDoc, its texts
-// filled in, packed in order onto 159cm × 500cm sheets, SHEETS_PER_ROW × SHEET_ROWS
-// sheets to a page — each page a copy of template, left open. Returns { docs (the page
-// documents, in order), sheets (count) }.
-function buildPrintPages(sourceDoc, template, sizes, orders) {
+// filled in, packed in order onto 159cm × 500cm sheets. The page is a copy of template,
+// left open. Returns { doc (the page), sheets (count) }.
+function buildPrintPage(sourceDoc, template, sizes, orders) {
     // Assign every product to a sheet + slot, using the master sizes (no duplication
     // needed — a duplicate is identical to its master).
     // Per size: all shirts first, then all pants — but only the products Step 1
@@ -122,70 +121,72 @@ function buildPrintPages(sourceDoc, template, sizes, orders) {
         }
     }
 
-    var docs = buildPages(sourceDoc, template, packer.sheets, placements, buildProduct);
-    return { docs: docs, sheets: packer.sheets.length };
+    var keys = [];
+    for (var i = 0; i < placements.length; i++) {
+        for (var j = 0; j < placements[i].keys.length; j++) {
+            if (!contains(keys, placements[i].keys[j])) keys.push(placements[i].keys[j]);
+        }
+    }
+    var doc = buildPage(sourceDoc, template, packer.sheets, keys, function (page) {
+        for (var i = 0; i < placements.length; i++) buildProduct(page, placements[i]);
+    });
+    return { doc: doc, sheets: packer.sheets.length };
 }
 
-// Build the print pages of a layout engine's layout ({ sheets, placements: [{ sheet, x,
+// Build the print page of a layout engine's layout ({ sheets, placements: [{ sheet, x,
 // y, rot, data: { sz, n, side } }] }, x/y real pt from the sheet's top-left, rot 0/180,
 // as layoutNest gives) straight from the Step-1 parts in sourceDoc: each placement gets
 // a copy of part {sz}_{side}, named {sz}_{n}_{side} with its SO / TEN_TREN / TEN_DUOI
-// removed, turned rot° and moved so its cut outline's top-left lands at (x, y). Each
-// page a copy of template, left open. Returns the page documents, in order. Afterwards
-// each layout placement has outline (its printed part's cut outline) and rect (its
-// sheet's artboard rect), in its page document's units.
-function buildLayoutPages(sourceDoc, template, layout) {
+// removed, turned rot° and moved so its cut outline's top-left lands at (x, y). The page
+// is a copy of template, left open; returns it. Afterwards each layout placement has
+// outline (its printed part's cut outline) and rect (its sheet's artboard rect).
+function buildLayoutPage(sourceDoc, template, layout) {
     var BLANK = { number: '', nameAbove: '', nameBelow: '' };
-    var placements = [];
+    var keys = [];
     for (var i = 0; i < layout.placements.length; i++) {
-        var p = layout.placements[i], it = p.data;
-        placements.push({ sheet: p.sheet, x: p.x, y: p.y, rot: p.rot, sz: it.sz, n: it.n, side: it.side,
-                          keys: [it.sz + '_' + it.side], src: p });
+        var it = layout.placements[i].data;
+        if (!contains(keys, it.sz + '_' + it.side)) keys.push(it.sz + '_' + it.side);
     }
 
     function buildPart(page, p) {
-        var ig = page.dupPart(p.sz, p.side, p.sz + '_' + p.n + '_' + p.side, BLANK);
+        var it = p.data;
+        var ig = page.dupPart(it.sz, it.side, it.sz + '_' + it.n + '_' + it.side, BLANK);
         if (p.rot === 180) ig.rotate(180, true, true, true, true, Transformation.CENTER);
         var vb = ig.pageItems[0].visibleBounds; // the _OUTLINE
         var r  = page.grid.rect(p.sheet);
         ig.position = [ig.position[0] + (r[0] + page.u(p.x)) - vb[0],
                        ig.position[1] + (r[1] - page.u(p.y)) - vb[1]];
-        p.src.outline = ig.pageItems[0];
-        p.src.rect = r;
+        p.outline = ig.pageItems[0];
+        p.rect = r;
     }
 
-    return buildPages(sourceDoc, template, layout.sheets, placements, buildPart);
+    return buildPage(sourceDoc, template, layout.sheets, keys, function (page) {
+        for (var i = 0; i < layout.placements.length; i++) buildPart(page, layout.placements[i]);
+    });
 }
 
-// Build one page document per page of sheets (makeSheet's), each a copy of template:
-// the Step-1 parts its placements need (p.keys, {size}_{side}) pasted in from
-// sourceDoc, build(page, p) called for each placement p on it (p.sheet.page), then one
-// artboard per sheet. page = { u (real pt → document units), grid (sheetGrid),
-// dupPart(sz, side, instanceName, order) }. Returns the page documents, in order.
-function buildPages(sourceDoc, template, sheets, placements, build) {
-    var numPages = sheets.length ? sheets[sheets.length - 1].page : 0;
-    var ts = (new Date()).getTime();
-    var docs = [];
+// Build the print page: a copy of template holding sheets (makeSheet's), with the
+// Step-1 parts keys ({size}_{side}) pasted in from sourceDoc as masters, build(page)
+// called to place the parts, then one artboard per sheet. page = { u (real pt →
+// document units), grid (sheetGrid), dupPart(sz, side, instanceName, order) }. Returns
+// the page document.
+function buildPage(sourceDoc, template, sheets, keys, build) {
+    var prevUIL = app.userInteractionLevel;
+    app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
+    try {
+        return makePage();
+    } finally {
+        app.userInteractionLevel = prevUIL;
+    }
 
-    function buildPage(pageNo) {
-        var opened = openLargeCanvasCopy(template, new File(Folder.temp + '/_mk_page_' + pageNo + '_' + ts + '.ai'));
+    function makePage() {
+        var opened = openLargeCanvasCopy(template, new File(Folder.temp + '/_mk_page_' + (new Date()).getTime() + '.ai'));
         var doc    = opened.doc, scale = opened.scale;
-        docs.push(doc);
         function u(realPt) { return realPt / scale; } // real pt → this document's units
+        var grid = sheetGrid(doc.artboards[0].artboardRect, scale, sheets.length);
 
-        var pagePlacements = [];
-        for (var i = 0; i < placements.length; i++) {
-            if (placements[i].sheet.page === pageNo) pagePlacements.push(placements[i]);
-        }
-
-        // Bring over every master part this page needs once, so the per-order
-        // duplicates below are same-document (fast).
-        var keys = [];
-        for (var i = 0; i < pagePlacements.length; i++) {
-            for (var j = 0; j < pagePlacements[i].keys.length; j++) {
-                if (!contains(keys, pagePlacements[i].keys[j])) keys.push(pagePlacements[i].keys[j]);
-            }
-        }
+        // Bring over every master part once, so the per-order duplicates below are
+        // same-document (fast).
         var mastersLayer = doc.layers.add();
         mastersLayer.name = 'MASTERS';
         var masters = pasteParts(sourceDoc, doc, mastersLayer, keys, scale);
@@ -215,26 +216,16 @@ function buildPages(sourceDoc, template, sheets, placements, build) {
             return instanceGroup;
         }
 
-        var page = { u: u, grid: sheetGrid(doc.artboards[0].artboardRect, scale), dupPart: dupPart };
-        for (var i = 0; i < pagePlacements.length; i++) build(page, pagePlacements[i]);
+        build({ u: u, grid: grid, dupPart: dupPart });
 
-        // One fixed-size artboard per sheet on this page.
+        // One fixed-size artboard per sheet.
         for (var i = 0; i < sheets.length; i++) {
-            if (sheets[i].page !== pageNo) continue;
-            doc.artboards.add(page.grid.rect(sheets[i])).name = sheetName(sheets[i].index + 1, sheets.length);
+            doc.artboards.add(grid.rect(sheets[i])).name = sheetName(i + 1, sheets.length);
         }
 
         // Drop the masters and the template's own artboard, leaving only the products.
         mastersLayer.remove();
         doc.artboards.remove(0);
+        return doc;
     }
-
-    var prevUIL = app.userInteractionLevel;
-    app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
-    try {
-        for (var pg = 1; pg <= numPages; pg++) buildPage(pg);
-    } finally {
-        app.userInteractionLevel = prevUIL;
-    }
-    return docs;
 }

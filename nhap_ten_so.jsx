@@ -26,8 +26,8 @@ function main() {
     for (var k in orders) totalQty += orders[k].length;
     if (totalQty === 0) { alert('Khong co don hang nao khop size da chuan bi.'); return; }
 
-    var built = buildPrintPages(sourceDoc, run.template, run.sizes, orders);
-    alert('Hoàn thành! Đã tạo ' + built.docs.length + ' tài liệu, ' + built.sheets + ' tấm in (159cm × 500cm).');
+    var built = buildPrintPage(sourceDoc, run.template, run.sizes, orders);
+    alert('Hoàn thành! Đã tạo ' + built.sheets + ' tấm in (159cm × 500cm).');
 }
 
 try {

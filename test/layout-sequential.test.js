@@ -138,15 +138,14 @@ test('an oversized part or sleeve throws with its label', function () {
     assert.throws(() => env.layoutSequential([], [part(10, 501, 'Áo size M (LEFT_SLEEVE)')]), /LEFT_SLEEVE/);
 });
 
-test('sheets carry their page grid position', function () {
+test('sheets carry their grid position', function () {
     const env = makeSheetEnv();
     env.SHEETS_PER_ROW = 2;
-    env.SHEET_ROWS     = 1;
     const parts = [];
     for (let i = 0; i < 3; i++) parts.push({ w: env.SHEET_W, h: env.SHEET_H, label: 'p' + i, data: 'p' + i });
     const layout = env.layoutSequential(parts, []);
-    const pos = Array.from(layout.sheets).map(function (s) { return [s.page, s.col]; });
-    assert.deepEqual(pos, [[1, 0], [1, 1], [2, 0]]);
+    const pos = Array.from(layout.sheets).map(function (s) { return [s.row, s.col]; });
+    assert.deepEqual(pos, [[0, 0], [0, 1], [1, 0]]);
 });
 
 test('a realistic order mix never overlaps or leaves the sheet', function () {

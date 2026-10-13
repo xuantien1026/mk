@@ -1,11 +1,11 @@
 // Reading and rearranging a print page made by nhap_ten_so.jsx, for the layout engines
 // (xep_nhanh.jsx, xep_toi_uu.jsx). Needs SIZES (config.jsx), requireItem (utils.jsx),
-// SHEETS_PER_ROW / sheetGridAt (sheet_layout.jsx).
+// sheetGridAt (sheet_layout.jsx).
 //
-// A page document's PRINT_OUTPUT layer holds one group per printed part, named
+// A print page's PRINT_OUTPUT layer holds one group per printed part, named
 // {size}_{n}_{side} (n = the order's number within its size), which holds
 // {name}_OUTLINE (the cut line) and {name}_FINAL (the design). Its artboards are the
-// sheets, numbered across all the pages of a print run.
+// sheets.
 
 // Every side Step 1 makes, in print order: a shirt's, then a pant's.
 var PRINT_SIDES = ['FRONT', 'BACK', 'LEFT_SLEEVE', 'RIGHT_SLEEVE',
@@ -38,7 +38,7 @@ function sortPrintOrder(items) {
     });
 }
 
-// The printed parts of a page document, in print order. Each item: { key ({size}_{side},
+// The printed parts of a print page, in print order. Each item: { key ({size}_{side},
 // the part's shape), sz, n, side, label, group, outline, w, h } — w × h the outline's
 // visible box (stroke included) in real pt; scale = real pt per document unit.
 function readOutputParts(doc, scale) {
@@ -57,15 +57,8 @@ function readOutputParts(doc, scale) {
     return sortPrintOrder(items);
 }
 
-// Where the index-th new sheet goes: SHEETS_PER_ROW across, then as many rows down as
-// needed (all on this page).
-function sheetSlot(index) {
-    return { col: index % SHEETS_PER_ROW, row: Math.floor(index / SHEETS_PER_ROW) };
-}
-
 // The name of the index-th new sheet: the first artboard's number plus index, padded to
-// its width (so numbering across page documents carries on) — or 01, 02, … when the
-// first artboard isn't numbered.
+// its width — or 01, 02, … when the first artboard isn't numbered.
 function renumberedSheetName(firstName, index) {
     var numbered = /^\d+$/.test(firstName);
     var s = String((numbered ? parseInt(firstName, 10) : 1) + index);
@@ -87,7 +80,7 @@ function applyLayout(doc, layout, scale) {
         var p = layout.placements[i], ig = p.data.group;
         if (p.rot === 180) ig.rotate(180, true, true, true, true, Transformation.CENTER);
         var vb = p.data.outline.visibleBounds;
-        var r = grid.rect(sheetSlot(p.sheet.index));
+        var r = grid.rect(p.sheet);
         var dx = (r[0] + p.x / scale) - vb[0];
         var dy = (r[1] - p.y / scale) - vb[1];
         ig.position = [ig.position[0] + dx, ig.position[1] + dy];
@@ -96,7 +89,7 @@ function applyLayout(doc, layout, scale) {
     // A document always needs one artboard: add the new ones before removing the old.
     var old = doc.artboards.length;
     for (var s = 0; s < layout.sheets.length; s++) {
-        doc.artboards.add(grid.rect(sheetSlot(s))).name = renumberedSheetName(firstName, s);
+        doc.artboards.add(grid.rect(layout.sheets[s])).name = renumberedSheetName(firstName, s);
     }
     for (var k = old - 1; k >= 0; k--) doc.artboards.remove(k);
 }
