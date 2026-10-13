@@ -1,14 +1,18 @@
 // Layout engine 2 from Illustrator: nest parts by their real outlines (nester/), turning
-// some 180°. Needs json.jsx, export_shapes.jsx, nester_bridge.jsx, sheet_layout.jsx.
+// some 180°. Needs json.jsx, export_shapes.jsx, nester_bridge.jsx, sheet_layout.jsx,
+// names.jsx (SO), utils.jsx (findAllItemsByName).
 
 // items: [{ key, outline, ... }] — one per part to print; key = {size}_{side} names its
 // shape, outline is its cut outline in a document whose units are 1/scale of real pt.
 // Shows a progress window while the nester runs: about timeLimit seconds, plus minutes
 // beforehand for a design with many sizes. Returns { sheets, placements: [{ sheet, x,
 // y, rot, data }] } like layoutSequential, with data the item and rot (0/180) to turn
-// the part about its center first.
-function layoutNest(items, scale, timeLimit, root) {
+// the part about its center first. recorder (optional, see nest_record.jsx) gets the
+// nester's job and result.
+function layoutNest(items, scale, timeLimit, root, recorder) {
     var job = buildNestJob(items, scale, timeLimit);
+    job.pairs = soPairs(items);
+    if (recorder) recorder.save('job.json', function () { return job; });
 
     var win = new Window('palette', 'Xếp tối ưu');
     win.alignChildren = 'fill';
@@ -31,7 +35,30 @@ function layoutNest(items, scale, timeLimit, root) {
     } finally {
         win.close();
     }
+    if (recorder) recorder.save('result.json', function () { return result; });
     return nestResultToLayout(result, items);
+}
+
+// When a size's shirt front (THAN_TRUOC) carries the number (SO), each order's front
+// and back are placed one right after the other. Returns [[front, back], ...] as
+// indices into items. An order with no number has its SO removed (nhap_ten_so.jsx), so
+// a front counts as numbered when any order's front of that size has an SO.
+function soPairs(items) {
+    var hasSo = {};
+    for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (it.side !== 'FRONT' || hasSo[it.key]) continue;
+        hasSo[it.key] = findAllItemsByName(it.group, SO).length > 0;
+    }
+    var front = {}, pairs = [];
+    for (var j = 0; j < items.length; j++) {
+        if (items[j].side === 'FRONT') front[items[j].sz + '_' + items[j].n] = j;
+    }
+    for (var k = 0; k < items.length; k++) {
+        var b = items[k], f = front[b.sz + '_' + b.n];
+        if (b.side === 'BACK' && f !== undefined && hasSo[items[f].key]) pairs.push([f, k]);
+    }
+    return pairs;
 }
 
 // The nester's result (see nester/index.js) as a layout, sheets from makeSheet.

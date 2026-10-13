@@ -153,17 +153,28 @@ function prepareShape(shape, { gap, rot, tol }) {
     };
 }
 
+// Gaps narrower than twice this (units) are closed in a no-fit polygon.
+const NFP_CLOSE = 5;
+
 // No-fit polygon: every position of B's origin at which B overlaps A (A at the origin).
 // Holes in the result are real — B fits there inside a dent of A.
 //
 // Clipper's Minkowski difference only sweeps the two boundaries, which misses the
 // positions where one polygon lies wholly inside the other; adding a copy of A swept
 // by one point of B (and of -B by one point of A) fills those in.
+//
+// The sweep is a union of many thin pieces, and rounding to whole units leaves hairline
+// gaps between some of them: sliver "holes" deep inside the NFP, up to many cm long,
+// whose corners placement would take for free positions — putting B right on top of
+// A (seen for a shape against itself turned 180°). Closing the union (grow, then shrink
+// by NFP_CLOSE) fills every gap under 0.1mm. Elsewhere the outline stays put, give or
+// take 2 units of rounding — well within the tol every prepared polygon is grown by.
 function noFitPolygon(A, B) {
     const swept = ClipperLib.Clipper.MinkowskiDiff(B, A); // {a - b}
     const b0 = B[0], a0 = A[0];
     const negB = B.map((p) => ({ X: a0.X - p.X, Y: a0.Y - p.Y }));
-    return union(swept.concat([translate(A, -b0.X, -b0.Y), positive(negB)]));
+    const nfp = union(swept.concat([translate(A, -b0.X, -b0.Y), positive(negB)]));
+    return offset(offset(nfp, NFP_CLOSE, 'miter', 100), -NFP_CLOSE, 'miter', 100);
 }
 
 module.exports = {

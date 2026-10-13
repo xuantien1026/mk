@@ -11,7 +11,7 @@ const ROOT = path.join(__dirname, '..');
 
 function makeNestEnv() {
     const context = vm.createContext({});
-    for (const rel of ['lib/config.jsx', 'lib/utils.jsx', 'lib/sheet_layout.jsx', 'lib/json.jsx',
+    for (const rel of ['lib/config.jsx', 'lib/names.jsx', 'lib/utils.jsx', 'lib/sheet_layout.jsx', 'lib/json.jsx',
                        'lib/export_shapes.jsx', 'lib/layout_nest.jsx']) {
         vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), context);
     }
@@ -44,6 +44,19 @@ test('nestResultToLayout maps parts back to their items and sheets to the page g
     assert.equal(b.data, items[1]);
     assert.equal(b.sheet, layout.sheets[2]);
     assert.deepEqual([b.x, b.y, b.rot], [3, 4, 180]);
+});
+
+test('soPairs pairs each order’s front and back when the front design carries an SO', function () {
+    const env = makeNestEnv();
+    const group = (named) => ({ pageItems: [{ name: 'X', typename: 'GroupItem', pageItems: named ? [{ name: 'SO' }] : [] }] });
+    const item = (sz, n, side, so) => ({ key: sz + '_' + side, sz, n, side, group: group(so) });
+    const items = [
+        item('S', 1, 'FRONT', true), item('S', 1, 'BACK', false), item('S', 1, 'LEFT_SLEEVE', true),
+        item('S', 2, 'FRONT', false), item('S', 2, 'BACK', true),  // no number on this order
+        item('M', 1, 'FRONT', false), item('M', 1, 'BACK', true),   // number on the back only
+        item('M', 2, 'FRONT', false), item('M', 2, 'BACK', true)
+    ];
+    assert.deepEqual(JSON.parse(JSON.stringify(env.soPairs(items))), [[0, 1], [3, 4]]);
 });
 
 // The engine-2 path minus Illustrator: buildNestJob (as layoutNest calls it) on fake

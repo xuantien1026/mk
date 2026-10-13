@@ -2,6 +2,7 @@
 // fixed-size sheets using no-fit polygons. One call = one candidate layout; the genetic
 // algorithm (ga.js) searches over orders and rotations.
 const g = require('./geometry');
+const { partnersOf } = require('./pairs');
 
 // Everything placement needs about a job, computed once: each (shape, rotation) as a
 // prepared polygon, and a shared NFP cache.
@@ -23,6 +24,7 @@ function createContext(job, opts = {}) {
         // touching its edge keeps the real cut line exactly on the real edge.
         sheetW: g.ptToUnits(job.sheet.w) + gap,
         sheetH: g.ptToUnits(job.sheet.h) + gap,
+        partner: partnersOf(job),
         nfpCache: new Map()
     };
 }
@@ -80,7 +82,9 @@ function findPosition(ctx, sheet, key) {
 }
 
 // Place genes [{ part, rot }] in order. Each part goes onto the earliest sheet it fits
-// on; a new sheet is opened only when none has room.
+// on; a new sheet is opened only when none has room. A part placed right after its pair
+// partner (job.pairs) starts looking at its partner's sheet, so it never lands on an
+// earlier one.
 // Returns { sheets, placements: [{ part, sheet, x, y, rot }] (units, grown frame),
 // fitness } — fitness = sheets used, plus the fraction of the last sheet's length used
 // (lower is better).
@@ -91,8 +95,11 @@ function placeAll(ctx, genes) {
     for (const gene of genes) {
         const key = ctx.job.parts[gene.part].shape + '@' + gene.rot;
         const s = ctx.shapes[key];
+        const prev = placements[placements.length - 1];
+        const from = ctx.partner && prev && ctx.partner.get(gene.part) === prev.part ? prev.sheet : 0;
         let pos = null, sheet = null;
-        for (const sh of sheets) {
+        for (let i = from; i < sheets.length; i++) {
+            const sh = sheets[i];
             if (sh.usedArea + s.area > sheetArea) continue; // can't possibly fit
             pos = findPosition(ctx, sh, key);
             if (pos) { sheet = sh; break; }

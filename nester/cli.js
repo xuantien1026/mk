@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { nest } = require('./index');
+const { nfpView } = require('./nfp_view');
 
 const LOCKED = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
@@ -46,7 +47,8 @@ async function main() {
     const [jobFile, outDir] = process.argv.slice(2);
     if (!jobFile || !outDir) throw new Error('usage: cli.js <job.json> <outDir>');
     const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
-    const result = await nest(job, {
+    // A job with nfp asks for one no-fit polygon to draw (tools/show_nfp.jsx), not a nest.
+    const result = job.nfp ? nfpView(job) : await nest(job, {
         onProgress: ({ generation, evaluations, best, elapsedMs }) => {
             writeProgress(path.join(outDir, 'progress.json'), JSON.stringify({
                 generation, evaluations, sheets: best.sheets, fitness: best.fitness, elapsedMs

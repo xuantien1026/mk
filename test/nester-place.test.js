@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert   = require('node:assert/strict');
+const fs       = require('fs');
+const path     = require('path');
 const g        = require('../nester/geometry');
 const { createContext, placeAll, toResult } = require('../nester/place');
 const { CM, shape, pant, shirt, sleeve, assertValidResult } = require('./helpers/shapes');
@@ -47,6 +49,19 @@ test('rotating 180° turns the shape about its visible box center', function () 
     };
     assert.ok(widthAt(p0.poly, 10) > widthAt(p0.poly, p0.h - 10));
     assert.ok(widthAt(p1.poly, 10) < widthAt(p1.poly, p1.h - 10));
+});
+
+test('a no-fit polygon has no sliver holes for placement to fall into', function () {
+    // Rounding left hairline gaps in this NFP (a shirt front against itself turned 180°):
+    // ten zero-area "holes" up to 16cm long, deep inside it. Placement took their
+    // corners for free positions and put the second front right on top of the first.
+    const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/shirt-shorts-SML.job.json'), 'utf8'));
+    const ctx = createContext(fixture);
+    const nfp = g.noFitPolygon(ctx.shapes['M_FRONT@0'].poly, ctx.shapes['M_FRONT@180'].poly);
+    for (const ring of nfp) {
+        const a = g.area(ring);
+        assert.ok(a > 0 || -a >= g.UNITS_PER_MM ** 2, 'hole of ' + (-a / g.UNITS_PER_MM ** 2) + 'mm²');
+    }
 });
 
 test('the first part sits at the sheet top-left, stroke on the edge', function () {

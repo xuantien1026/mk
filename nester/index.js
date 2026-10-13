@@ -3,7 +3,8 @@
 //
 // Job (pt, y down — written by Illustrator, see lib/export_shapes.jsx):
 //   { sheet: { w, h }, gap, rotations?: [0, 180], timeLimit?: seconds,
-//     shapes: { key: { w, h, pad, rings } }, parts: [{ shape: key }] }
+//     shapes: { key: { w, h, pad, rings } }, parts: [{ shape: key }],
+//     pairs?: [[a, b], ...] — parts placed one right after the other, see pairs.js }
 // Result: { sheets, fitness, placements: [{ part, sheet, x, y, rot }] } — (x, y) is the
 // top-left of the part's visible box on its sheet after turning it rot° about the box's
 // center.

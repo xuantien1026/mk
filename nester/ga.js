@@ -2,6 +2,11 @@
 // candidate is a list of genes [{ part, rot }]; its fitness is what place.js's
 // placeAll gives for it. evaluate() is injected so candidates can be scored on worker
 // threads (pool.js) or in-process (tests).
+//
+// job.pairs ([[a, b], ...], part indices) are parts that must be placed one right after
+// the other (either first): a shirt's front and back, when the front carries its
+// number. Every candidate keeps each pair as neighbours — see keepPairs.
+const { partnersOf } = require('./pairs');
 
 // Small seeded PRNG (mulberry32), so a run is reproducible.
 function makeRandom(seed) {
@@ -15,11 +20,41 @@ function makeRandom(seed) {
     };
 }
 
+// genes with each pair's second part moved to right after its first. Everything else
+// keeps its order.
+function keepPairs(genes, partner) {
+    if (!partner) return genes;
+    const byPart = new Map(genes.map((x) => [x.part, x]));
+    const out = [], done = new Set();
+    for (const x of genes) {
+        if (done.has(x.part)) continue;
+        out.push(x);
+        done.add(x.part);
+        const p = partner.get(x.part);
+        if (p !== undefined && !done.has(p)) { out.push(byPart.get(p)); done.add(p); }
+    }
+    return out;
+}
+
+// genes (pairs already neighbours) cut into units: a pair, or a single part.
+function unitsOf(genes, partner) {
+    const units = [];
+    for (let i = 0; i < genes.length; i++) {
+        if (partner && i + 1 < genes.length && partner.get(genes[i].part) === genes[i + 1].part) {
+            units.push([genes[i], genes[i + 1]]);
+            i++;
+        } else {
+            units.push([genes[i]]);
+        }
+    }
+    return units;
+}
+
 // Starting candidates:
 //  - largest part first, all upright;
 //  - largest first, every other copy of a shape turned 180° (head-to-toe pairs);
 //  - the job's own order (engine 1's sequence), all upright.
-function seeds(parts, areaOf, rotations) {
+function seeds(parts, areaOf, rotations, partner = null) {
     const idx = parts.map((_, i) => i);
     const bySize = idx.slice().sort((a, b) => areaOf(b) - areaOf(a) || a - b);
     const turn = rotations.includes(180);
@@ -32,33 +67,39 @@ function seeds(parts, areaOf, rotations) {
         bySize.map((part) => ({ part, rot: 0 })),
         alternating,
         idx.map((part) => ({ part, rot: 0 }))
-    ];
+    ].map((genes) => keepPairs(genes, partner));
 }
 
-// Swap neighbours / flip rotations, each with probability rate. Swapping two copies of
-// the same shape and rotation changes nothing, so those swaps are skipped.
-function mutate(genes, parts, rate, rotations, random) {
-    const out = genes.map((x) => ({ part: x.part, rot: x.rot }));
-    for (let i = 0; i < out.length; i++) {
-        if (i + 1 < out.length && random() < rate) {
-            const a = out[i], b = out[i + 1];
-            if (parts[a.part].shape !== parts[b.part].shape || a.rot !== b.rot) { out[i] = b; out[i + 1] = a; }
+// Swap neighbours / flip rotations, each with probability rate. A pair moves as one
+// unit, and may also swap which of its two goes first. Swapping two copies of the same
+// shape and rotation changes nothing, so those swaps are skipped.
+function mutate(genes, parts, rate, rotations, random, partner = null) {
+    const units = unitsOf(genes.map((x) => ({ part: x.part, rot: x.rot })), partner);
+    for (let i = 0; i < units.length; i++) {
+        if (i + 1 < units.length && random() < rate) {
+            const a = units[i], b = units[i + 1];
+            const same = a.length === 1 && b.length === 1
+                && parts[a[0].part].shape === parts[b[0].part].shape && a[0].rot === b[0].rot;
+            if (!same) { units[i] = b; units[i + 1] = a; }
         }
-        if (rotations.length > 1 && random() < rate) {
-            out[i].rot = rotations[Math.floor(random() * rotations.length)];
-        }
+        if (units[i].length === 2 && random() < rate) units[i].reverse();
+    }
+    const out = [].concat(...units);
+    if (rotations.length > 1) {
+        for (const x of out) if (random() < rate) x.rot = rotations[Math.floor(random() * rotations.length)];
     }
     return out;
 }
 
 // Single-point order crossover: the child takes p1's genes up to the cut, then the
-// remaining parts in p2's order (with p2's rotations).
-function crossover(p1, p2, random) {
+// remaining parts in p2's order (with p2's rotations); a pair the cut splits is joined
+// up again.
+function crossover(p1, p2, random, partner = null) {
     const cut = Math.round(Math.min(Math.max(random(), 0.1), 0.9) * (p1.length - 1));
     const child = p1.slice(0, cut).map((x) => ({ part: x.part, rot: x.rot }));
     const taken = new Set(child.map((x) => x.part));
     for (const x of p2) if (!taken.has(x.part)) child.push({ part: x.part, rot: x.rot });
-    return child;
+    return keepPairs(child, partner);
 }
 
 // Pick a parent, favouring better-ranked ones (population sorted best first).
@@ -87,6 +128,7 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
                              patience = 200, seed = 1, onProgress } = {}) {
     const random = makeRandom(seed);
     const rotations = job.rotations || [0, 180];
+    const partner = partnersOf(job);
     const start = Date.now();
     let evaluations = 0;
 
@@ -96,9 +138,9 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
         return results.map((r, i) => Object.assign({ genes: list[i] }, r));
     }
 
-    const initial = seeds(job.parts, areaOf, rotations);
+    const initial = seeds(job.parts, areaOf, rotations, partner);
     const base = initial[1];
-    while (initial.length < populationSize) initial.push(mutate(base, job.parts, 0.3, rotations, random));
+    while (initial.length < populationSize) initial.push(mutate(base, job.parts, 0.3, rotations, random, partner));
     let population = (await score(initial)).sort((a, b) => a.fitness - b.fitness);
     let best = population[0];
     let generation = 0, stale = 0;
@@ -110,7 +152,8 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
         while (children.length < populationSize - 1) {
             const p1 = pick(population, random);
             const p2 = pick(population, random, p1);
-            children.push(mutate(crossover(p1.genes, p2.genes, random), job.parts, mutationRate, rotations, random));
+            children.push(mutate(crossover(p1.genes, p2.genes, random, partner), job.parts, mutationRate, rotations,
+                                 random, partner));
         }
         const scored = await score(children);
         population = [best].concat(scored).sort((a, b) => a.fitness - b.fitness); // elitism

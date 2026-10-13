@@ -6,7 +6,8 @@ const path     = require('path');
 const { execFileSync } = require('child_process');
 const g        = require('../nester/geometry');
 const { nest } = require('../nester/index');
-const { crossover, mutate, seeds, makeRandom } = require('../nester/ga');
+const { crossover, mutate, seeds, makeRandom, search } = require('../nester/ga');
+const { partnersOf } = require('../nester/pairs');
 const { createContext, placeAll } = require('../nester/place');
 const { CM, pant, shirt, sleeve, assertValidResult } = require('./helpers/shapes');
 
@@ -32,6 +33,65 @@ test('crossover and mutation keep every part exactly once', function () {
         assert.deepEqual(partsOf(child), all);
         assert.ok(child.every((x) => x.rot === 0 || x.rot === 180));
     }
+});
+
+// Every order's front (F) and back (B) as a pair.
+function pairedJob(orders) {
+    const job = mixJob(orders);
+    job.pairs = [];
+    for (let n = 0; n < orders; n++) job.pairs.push([8 * n, 8 * n + 1]);
+    return job;
+}
+
+function assertPairsAdjacent(job, genes) {
+    const at = new Map(genes.map((x, i) => [x.part, i]));
+    for (const [a, b] of job.pairs) assert.equal(Math.abs(at.get(a) - at.get(b)), 1, 'pair ' + a + '/' + b);
+}
+
+test('seeds, crossover and mutation keep each pair one right after the other', function () {
+    const job = pairedJob(4);
+    const partner = partnersOf(job);
+    const random = makeRandom(11);
+    const all = job.parts.map((_, i) => i);
+    const initial = seeds(job.parts, (i) => i, [0, 180], partner);
+    for (const genes of initial) assertPairsAdjacent(job, genes);
+    let first = 0;
+    for (let k = 0; k < 200; k++) {
+        const [a, b] = [initial[k % 3], initial[(k + 1) % 3]];
+        const child = mutate(crossover(a, b, random, partner), job.parts, 0.3, [0, 180], random, partner);
+        assert.deepEqual(partsOf(child), all);
+        assertPairsAdjacent(job, child);
+        if (child.findIndex((x) => x.part === 0) < child.findIndex((x) => x.part === 1)) first++;
+    }
+    assert.ok(first > 0 && first < 200, 'either part of a pair can go first');
+});
+
+test('the search keeps pairs together and the second never goes on an earlier sheet', async function () {
+    const job = pairedJob(6);
+    const ctx = createContext(job);
+    const evaluate = async (list) => list.map((genes) => placeAll(ctx, genes));
+    const areaOf = (i) => ctx.shapes[job.parts[i].shape + '@0'].area;
+    const best = await search(job, { evaluate, areaOf, timeLimitMs: 1000, seed: 3 });
+    assertPairsAdjacent(job, best.genes);
+    const sheetOf = new Map(best.placements.map((p) => [p.part, p.sheet]));
+    for (let i = 1; i < best.genes.length; i++) {
+        const prev = best.genes[i - 1].part, cur = best.genes[i].part;
+        if (ctx.partner.get(cur) === prev) assert.ok(sheetOf.get(cur) >= sheetOf.get(prev));
+    }
+});
+
+test('a pair’s second part skips earlier sheets with room', function () {
+    // A small part placed second would drop into sheet 0's leftover space; as the
+    // partner of a part on sheet 1 it must stay on sheet 1 or later.
+    const job = { sheet: { w: 100 * CM, h: 100 * CM }, gap: GAP,
+                  shapes: { BIG: sleeve(95, 70), SMALL: sleeve(20, 20) },
+                  parts: [{ shape: 'BIG' }, { shape: 'BIG' }, { shape: 'SMALL' }] };
+    const genes = [0, 1, 2].map((part) => ({ part, rot: 0 }));
+    assert.equal(placeAll(createContext(job), genes).placements[2].sheet, 0);
+    job.pairs = [[1, 2]];
+    const layout = placeAll(createContext(job), genes);
+    assert.equal(layout.placements[1].sheet, 1);
+    assert.equal(layout.placements[2].sheet, 1);
 });
 
 test('upright-only jobs never get turned', function () {
