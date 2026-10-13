@@ -28,6 +28,13 @@ test('every .jsx file parses as ES3-era JavaScript (after its # directives)', fu
     }
 });
 
+test('pantParts picks out every pant side', function () {
+    const env = makeNestEnv();
+    const items = ['FRONT', 'LEFT_PANT', 'BACK', 'LEFT_SLEEVE', 'RIGHT_SLEEVE', 'RIGHT_PANT', 'LEFT_PANT_1',
+                   'LEFT_PANT_2', 'RIGHT_PANT_1', 'RIGHT_PANT_2'].map((side) => ({ side }));
+    assert.deepEqual(Array.from(env.pantParts(items)), [1, 5, 6, 7, 8, 9]);
+});
+
 test('nestResultToLayout maps parts back to their items and sheets to the page grid', function () {
     const env = makeNestEnv();
     env.SHEETS_PER_ROW = 2;

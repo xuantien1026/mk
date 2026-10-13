@@ -1,6 +1,8 @@
-// Parts that must be placed one right after the other: job.pairs, [[a, b], ...] part
-// indices — a shirt's front and back, when the front carries its number
-// (lib/layout_nest.jsx).
+// Order constraints on a job's parts (lib/layout_nest.jsx):
+//  - job.pairs, [[a, b], ...] part indices, placed one right after the other — a
+//    shirt's front and back, when the front carries its number;
+//  - job.pants, [part, ...], placed after every other part — the pants, when the user
+//    wants all shirts and sleeves first.
 
 // part → its pair partner; null when the job has no pairs.
 function partnersOf(job) {
@@ -10,4 +12,9 @@ function partnersOf(job) {
     return partner;
 }
 
-module.exports = { partnersOf };
+// The set of parts to place last; null when the job has none.
+function pantsOf(job) {
+    return job.pants && job.pants.length ? new Set(job.pants) : null;
+}
+
+module.exports = { partnersOf, pantsOf };

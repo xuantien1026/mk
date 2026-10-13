@@ -15,7 +15,8 @@
 // nests its parts by their real cut outlines, turning some 180°, onto as few 159cm ×
 // 500cm sheets as the nester (nester/, needs Node.js and `npm install`) finds in the
 // time given. A shirt whose front has its number (SO) gets its front and back placed
-// one right after the other. Rearranges the page in place; close it without
+// one right after the other. Optionally, every shirt and sleeve is placed before the
+// pants (a checkbox next to the time). Rearranges the page in place; close it without
 // saving to undo. Each run is recorded to debug/last_nest/ (see lib/nest_record.jsx).
 // xep_don_so_luong.jsx runs this on its pages by itself.
 
@@ -26,10 +27,10 @@ function main() {
     var items = nestableParts(doc);
     if (!items.length) { alert('Không có chi tiết nào trong layer PRINT_OUTPUT. Hãy chạy nhap_ten_so.jsx trước.'); return; }
 
-    var timeLimit = askNestTime();
-    if (timeLimit === null) return;
+    var options = askNestOptions(items);
+    if (options === null) return;
 
-    var nested = nestPage(doc, items, timeLimit, SCRIPT_DIR);
+    var nested = nestPage(doc, items, options.timeLimit, SCRIPT_DIR, options.shirtsFirst);
     alert('Đã xếp lại ' + items.length + ' chi tiết: ' + nested.before + ' → ' + nested.after + ' tấm in.');
 }
 

@@ -8,10 +8,12 @@
 // beforehand for a design with many sizes. Returns { sheets, placements: [{ sheet, x,
 // y, rot, data }] } like layoutSequential, with data the item and rot (0/180) to turn
 // the part about its center first. recorder (optional, see nest_record.jsx) gets the
-// nester's job and result.
-function layoutNest(items, scale, timeLimit, root, recorder) {
+// nester's job and result. shirtsFirst: place every shirt and sleeve part before the
+// pants (see pantParts).
+function layoutNest(items, scale, timeLimit, root, recorder, shirtsFirst) {
     var job = buildNestJob(items, scale, timeLimit);
     job.pairs = soPairs(items);
+    if (shirtsFirst) job.pants = pantParts(items);
     if (recorder) recorder.save('job.json', function () { return job; });
 
     var win = new Window('palette', 'Xếp tối ưu');
@@ -61,6 +63,15 @@ function soPairs(items) {
         if (b.side === 'BACK' && f !== undefined && hasSo[items[f].key]) pairs.push([f, k]);
     }
     return pairs;
+}
+
+// The pant parts (QUAN_*: sides LEFT_PANT, RIGHT_PANT_1, ...), as indices into items.
+// With these as the job's pants, the nester places them after every shirt part (front,
+// back, sleeves), never on an earlier sheet.
+function pantParts(items) {
+    var pants = [];
+    for (var i = 0; i < items.length; i++) if (/PANT/.test(items[i].side)) pants.push(i);
+    return pants;
 }
 
 // The nester's result (see nester/index.js) as a layout, sheets from makeSheet.

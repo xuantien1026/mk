@@ -61,8 +61,9 @@ function main() {
     if (!items.length) { alert('Khong co don hang nao khop size da chuan bi.'); return; }
     for (var i = 0; i < items.length; i++) checkFits({ width: items[i].w, height: items[i].h }, items[i].label);
 
-    var timeLimit = askNestTime();
-    if (timeLimit === null) return;
+    var options = askNestOptions([]); // no shirts-first checkbox here
+    if (options === null) return;
+    var timeLimit = options.timeLimit;
 
     var recorder = nestRecorder(SCRIPT_DIR);
     recorder.save('before.json', function () { return recordedParts(items, scale); });

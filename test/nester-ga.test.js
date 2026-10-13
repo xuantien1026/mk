@@ -94,6 +94,55 @@ test('a pair’s second part skips earlier sheets with room', function () {
     assert.equal(layout.placements[2].sheet, 1);
 });
 
+// Every order's pant pieces (P1, P2) placed last.
+function pantsJob(orders) {
+    const job = pairedJob(orders);
+    job.pants = job.parts.map((_, i) => i).filter((i) => job.parts[i].shape[0] === 'P');
+    return job;
+}
+
+function assertPantsLast(job, genes) {
+    const firstPant = genes.findIndex((x) => job.pants.includes(x.part));
+    assert.ok(genes.slice(firstPant).every((x) => job.pants.includes(x.part)), 'no shirt part after a pant');
+}
+
+test('seeds, crossover and mutation keep the pants after every shirt part, and pairs together', function () {
+    const job = pantsJob(4);
+    const partner = partnersOf(job), pants = new Set(job.pants);
+    const random = makeRandom(13);
+    const all = job.parts.map((_, i) => i);
+    const initial = seeds(job.parts, (i) => i, [0, 180], partner, pants);
+    for (const genes of initial) { assertPantsLast(job, genes); assertPairsAdjacent(job, genes); }
+    for (let k = 0; k < 200; k++) {
+        const [a, b] = [initial[k % 3], initial[(k + 1) % 3]];
+        const child = mutate(crossover(a, b, random, partner, pants), job.parts, 0.3, [0, 180], random, partner, pants);
+        assert.deepEqual(partsOf(child), all);
+        assertPantsLast(job, child);
+        assertPairsAdjacent(job, child);
+    }
+});
+
+test('the search puts no pant on a sheet before the last shirt part', async function () {
+    const job = pantsJob(6);
+    const result = await nest(job, { threads: 0, timeLimitMs: 1000, seed: 3 });
+    assertValidResult(job, result);
+    const pants = new Set(job.pants);
+    const lastShirt = Math.max(...result.placements.filter((p) => !pants.has(p.part)).map((p) => p.sheet));
+    assert.ok(result.placements.filter((p) => pants.has(p.part)).every((p) => p.sheet >= lastShirt));
+});
+
+test('a pant skips earlier sheets with room, but may share the last shirt sheet', function () {
+    const job = { sheet: { w: 100 * CM, h: 100 * CM }, gap: GAP,
+                  shapes: { BIG: sleeve(95, 70), SMALL: sleeve(20, 20) },
+                  parts: [{ shape: 'BIG' }, { shape: 'BIG' }, { shape: 'SMALL' }, { shape: 'SMALL' }] };
+    const genes = [0, 1, 2, 3].map((part) => ({ part, rot: 0 }));
+    assert.equal(placeAll(createContext(job), genes).placements[3].sheet, 0);
+    job.pants = [3];
+    const layout = placeAll(createContext(job), genes);
+    assert.equal(layout.placements[2].sheet, 0, 'a shirt part still fills earlier gaps');
+    assert.equal(layout.placements[3].sheet, 1);
+});
+
 test('upright-only jobs never get turned', function () {
     const job = mixJob(1);
     const random = makeRandom(3);
