@@ -1,0 +1,240 @@
+// Building the print pages from a print command (CSV), shared by nhap_ten_so.jsx and
+// xep_don_so_luong.jsx. Needs names.jsx, config.jsx, utils.jsx, print_command.jsx,
+// print_dialogs.jsx, sheet_layout.jsx, step1_parts.jsx, large_canvas.jsx.
+
+var CUSTOMER_NAME_MAX_WIDTH = {
+    'XS':  28.0 * 10 * PT_PER_MM,
+    'S':   29.5 * 10 * PT_PER_MM,
+    'M':   31.0 * 10 * PT_PER_MM,
+    'L':   32.5 * 10 * PT_PER_MM,
+    'XL':  34.0 * 10 * PT_PER_MM,
+    '2XL': 35.5 * 10 * PT_PER_MM,
+    '3XL': 37.0 * 10 * PT_PER_MM,
+    '4XL': 38.5 * 10 * PT_PER_MM,
+    '5XL': 40.0 * 10 * PT_PER_MM,
+    '6XL': 41.5 * 10 * PT_PER_MM
+};
+
+// Fill every text frame named fieldName in container with value, or remove them
+// when value is empty. maxW (optional) caps the rendered width.
+function applyField(container, fieldName, value, maxW) {
+    var fields = findAllItemsByName(container, fieldName);
+    for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        if (f.typename !== 'TextFrame') continue;
+        if (value !== null && value !== '') {
+            f.contents = value;
+            if (maxW) {
+                var b = f.geometricBounds;
+                var w = b[2] - b[0];
+                if (w > maxW) f.resize((maxW / w) * 100, 100, true, true, true, true, false, Transformation.CENTER);
+            }
+        } else {
+            f.remove();
+        }
+    }
+}
+
+// Everything a print run needs before building: the sizes Step 1 prepared in sourceDoc,
+// the Large Canvas template (in scriptDir/lib), and the chosen CSV's rows — only the
+// chosen Mẫu's when it mixes several. Alerts and returns null when something is
+// missing; null too when the person cancels. Returns { sizes, template, rows }.
+function readPrintRun(sourceDoc, scriptDir) {
+    var sizes = detectPreparedSizes(sourceDoc);
+    if (sizes.length === 0) {
+        alert('Chua co thiet ke nao. Hay chay nhay_size.jsx truoc.');
+        return null;
+    }
+
+    // Blank Large Canvas document: in Illustrator, File ▸ New with a width above 578cm
+    // (e.g. 1000cm × 1000cm) — Illustrator switches to Large Canvas automatically — then
+    // save it here. Scripts can't create a Large Canvas document themselves.
+    var template = new File(scriptDir + '/lib/large_canvas.ai');
+    if (!template.exists) {
+        alert('Không tìm thấy file mẫu Large Canvas: ' + template.fsName + '\n'
+            + 'Tạo file mới trong Illustrator (File ▸ New) rộng hơn 578cm, ví dụ 1000cm × 1000cm, '
+            + 'rồi lưu vào đường dẫn trên.');
+        return null;
+    }
+
+    var file = selectPrintCommandFile();
+    if (!file) return null; // cancelled
+
+    var rows = parsePrintCommand(file);
+    if (rows.length === 0) { alert('Khong tim thay dong du lieu nao trong file.'); return null; }
+
+    // If the CSV mixes several Mẫu, ask which one to print and keep only its rows.
+    // A single distinct value (incl. no Mẫu column / all blank) needs no prompt.
+    var distinct = distinctVariant(rows);
+    if (distinct.length > 1) {
+        var chosen = selectVariant(distinct);
+        if (chosen == null) return null; // cancelled
+        rows = filterByVariant(rows, chosen);
+    }
+    return { sizes: sizes, template: template, rows: rows };
+}
+
+// Build the print pages: every order of orders ({ size: [orders] }, sizes in sizes'
+// order) gets a copy of each of its product's Step-1 parts from sourceDoc, its texts
+// filled in, packed in order onto 159cm × 500cm sheets, SHEETS_PER_ROW × SHEET_ROWS
+// sheets to a page — each page a copy of template, left open. Returns { docs (the page
+// documents, in order), sheets (count) }.
+function buildPrintPages(sourceDoc, template, sizes, orders) {
+    // Assign every product to a sheet + slot, using the master sizes (no duplication
+    // needed — a duplicate is identical to its master).
+    // Per size: all shirts first, then all pants — but only the products Step 1
+    // actually produced for this design (shirt-only / pant-only / both).
+    var KINDS  = [{ kind: 'SHIRT', label: 'Áo' }, { kind: 'PANT', label: 'Quần' }];
+    var packer = createSheetPacker();
+    var placements = []; // { sheet, offset, sz, sides, keys, layout, prefix, order }
+    for (var s = 0; s < sizes.length; s++) {
+        var sz   = sizes[s];
+        var list = orders[sz];
+        if (!list) continue;
+        for (var t = 0; t < KINDS.length; t++) {
+            var sides = productSides(sourceDoc, KINDS[t].kind, sz);
+            if (sides.length === 0) continue;
+            var boxes = productBoxes(sourceDoc, sz, sides);
+            for (var b = 0; b < boxes.length; b++) checkFits(boxes[b], KINDS[t].label + ' size ' + sz + ' ' + sides[b]);
+            var layout = productLayout(boxes); // wraps into rows when wider than a sheet
+            var keys = [];
+            for (var k = 0; k < sides.length; k++) keys.push(sz + '_' + sides[k]);
+            for (var q = 0; q < list.length; q++) {
+                var slot = packer.place(layout.height);
+                placements.push({ sheet: slot.sheet, offset: slot.offset, sz: sz, sides: sides, keys: keys,
+                                  layout: layout, prefix: sz + '_' + (q + 1), order: list[q] });
+            }
+        }
+    }
+
+    // Duplicate a product's parts and move each to its place in the product's block
+    // (p.layout): the block horizontally centered in the sheet, top at the slot top.
+    function buildProduct(page, p) {
+        var r    = page.grid.rect(p.sheet);
+        var left = r[0] + page.u((SHEET_W - p.layout.width) / 2);
+        var top  = r[1] - page.u(p.offset);
+        for (var i = 0; i < p.sides.length; i++) {
+            var ig  = page.dupPart(p.sz, p.sides[i], p.prefix + '_' + p.sides[i], p.order);
+            var box = partBounds(ig.pageItems[1]); // the _FINAL, below its _OUTLINE
+            var dx  = (left + page.u(p.layout.pos[i].x)) - box.left;
+            var dy  = (top  - page.u(p.layout.pos[i].y)) - box.top;
+            ig.position = [ig.position[0] + dx, ig.position[1] + dy];
+        }
+    }
+
+    var docs = buildPages(sourceDoc, template, packer.sheets, placements, buildProduct);
+    return { docs: docs, sheets: packer.sheets.length };
+}
+
+// Build the print pages of a layout engine's layout ({ sheets, placements: [{ sheet, x,
+// y, rot, data: { sz, n, side } }] }, x/y real pt from the sheet's top-left, rot 0/180,
+// as layoutNest gives) straight from the Step-1 parts in sourceDoc: each placement gets
+// a copy of part {sz}_{side}, named {sz}_{n}_{side} with its SO / TEN_TREN / TEN_DUOI
+// removed, turned rot° and moved so its cut outline's top-left lands at (x, y). Each
+// page a copy of template, left open. Returns the page documents, in order. Afterwards
+// each layout placement has outline (its printed part's cut outline) and rect (its
+// sheet's artboard rect), in its page document's units.
+function buildLayoutPages(sourceDoc, template, layout) {
+    var BLANK = { number: '', nameAbove: '', nameBelow: '' };
+    var placements = [];
+    for (var i = 0; i < layout.placements.length; i++) {
+        var p = layout.placements[i], it = p.data;
+        placements.push({ sheet: p.sheet, x: p.x, y: p.y, rot: p.rot, sz: it.sz, n: it.n, side: it.side,
+                          keys: [it.sz + '_' + it.side], src: p });
+    }
+
+    function buildPart(page, p) {
+        var ig = page.dupPart(p.sz, p.side, p.sz + '_' + p.n + '_' + p.side, BLANK);
+        if (p.rot === 180) ig.rotate(180, true, true, true, true, Transformation.CENTER);
+        var vb = ig.pageItems[0].visibleBounds; // the _OUTLINE
+        var r  = page.grid.rect(p.sheet);
+        ig.position = [ig.position[0] + (r[0] + page.u(p.x)) - vb[0],
+                       ig.position[1] + (r[1] - page.u(p.y)) - vb[1]];
+        p.src.outline = ig.pageItems[0];
+        p.src.rect = r;
+    }
+
+    return buildPages(sourceDoc, template, layout.sheets, placements, buildPart);
+}
+
+// Build one page document per page of sheets (makeSheet's), each a copy of template:
+// the Step-1 parts its placements need (p.keys, {size}_{side}) pasted in from
+// sourceDoc, build(page, p) called for each placement p on it (p.sheet.page), then one
+// artboard per sheet. page = { u (real pt → document units), grid (sheetGrid),
+// dupPart(sz, side, instanceName, order) }. Returns the page documents, in order.
+function buildPages(sourceDoc, template, sheets, placements, build) {
+    var numPages = sheets.length ? sheets[sheets.length - 1].page : 0;
+    var ts = (new Date()).getTime();
+    var docs = [];
+
+    function buildPage(pageNo) {
+        var opened = openLargeCanvasCopy(template, new File(Folder.temp + '/_mk_page_' + pageNo + '_' + ts + '.ai'));
+        var doc    = opened.doc, scale = opened.scale;
+        docs.push(doc);
+        function u(realPt) { return realPt / scale; } // real pt → this document's units
+
+        var pagePlacements = [];
+        for (var i = 0; i < placements.length; i++) {
+            if (placements[i].sheet.page === pageNo) pagePlacements.push(placements[i]);
+        }
+
+        // Bring over every master part this page needs once, so the per-order
+        // duplicates below are same-document (fast).
+        var keys = [];
+        for (var i = 0; i < pagePlacements.length; i++) {
+            for (var j = 0; j < pagePlacements[i].keys.length; j++) {
+                if (!contains(keys, pagePlacements[i].keys[j])) keys.push(pagePlacements[i].keys[j]);
+            }
+        }
+        var mastersLayer = doc.layers.add();
+        mastersLayer.name = 'MASTERS';
+        var masters = pasteParts(sourceDoc, doc, mastersLayer, keys, scale);
+
+        var outLayer = doc.layers.add();
+        outLayer.name = 'PRINT_OUTPUT';
+
+        // Duplicate one master part for an order and fill in its texts. Returns the
+        // instance group: its _OUTLINE, then its _FINAL.
+        function dupPart(sz, side, instanceName, order) {
+            var m = masters[sz + '_' + side];
+            var g = m.design.duplicate(outLayer, ElementPlacement.PLACEATEND);  g.name = instanceName + '_FINAL';
+            var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
+            var maxW = CUSTOMER_NAME_MAX_WIDTH[sz] ? u(CUSTOMER_NAME_MAX_WIDTH[sz]) : null;
+            applyField(g, TEN_TREN, order.nameAbove, maxW);
+            applyField(g, TEN_DUOI, order.nameBelow, maxW);
+            applyField(g, SO,       order.number,    null);
+
+            // Keep each part-instance's _OUTLINE and _FINAL together as a single group,
+            // the same way Step 1 does, so they read as one unit in the print output.
+            // Outline stays on top (PLACEATBEGINNING), final below.
+            var instanceGroup = outLayer.groupItems.add();
+            instanceGroup.name = instanceName;
+            o.move(instanceGroup, ElementPlacement.PLACEATBEGINNING);
+            g.move(instanceGroup, ElementPlacement.PLACEATEND);
+
+            return instanceGroup;
+        }
+
+        var page = { u: u, grid: sheetGrid(doc.artboards[0].artboardRect, scale), dupPart: dupPart };
+        for (var i = 0; i < pagePlacements.length; i++) build(page, pagePlacements[i]);
+
+        // One fixed-size artboard per sheet on this page.
+        for (var i = 0; i < sheets.length; i++) {
+            if (sheets[i].page !== pageNo) continue;
+            doc.artboards.add(page.grid.rect(sheets[i])).name = sheetName(sheets[i].index + 1, sheets.length);
+        }
+
+        // Drop the masters and the template's own artboard, leaving only the products.
+        mastersLayer.remove();
+        doc.artboards.remove(0);
+    }
+
+    var prevUIL = app.userInteractionLevel;
+    app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
+    try {
+        for (var pg = 1; pg <= numPages; pg++) buildPage(pg);
+    } finally {
+        app.userInteractionLevel = prevUIL;
+    }
+    return docs;
+}

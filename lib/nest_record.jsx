@@ -49,14 +49,15 @@ function recordedParts(items, scale) {
 
 // after.json: where each part really ended up — its outline's visible top-left from its
 // sheet's top-left (real pt, y down), what result.json asked for — and its outline
-// traced. In layout.placements order, the same as result.json's.
-function recordedPlacements(doc, layout, scale) {
+// traced. In layout.placements order, the same as result.json's. placed(placement) →
+// { outline (the placed part's), rect (its sheet's artboard rect, in the same document) }.
+function recordedPlacements(layout, scale, placed) {
     var parts = [];
     for (var i = 0; i < layout.placements.length; i++) {
-        var p = layout.placements[i], it = p.data;
-        var r = doc.artboards[p.sheet.index].artboardRect, vb = it.outline.visibleBounds;
+        var p = layout.placements[i], it = p.data, at = placed(p);
+        var r = at.rect, vb = at.outline.visibleBounds;
         parts.push({ label: it.label, key: it.key, sheet: p.sheet.index, rot: p.rot,
-                     x: (vb[0] - r[0]) * scale, y: (r[1] - vb[1]) * scale, shape: exportShape(it.outline, scale) });
+                     x: (vb[0] - r[0]) * scale, y: (r[1] - vb[1]) * scale, shape: exportShape(at.outline, scale) });
     }
     return { scale: scale, parts: parts };
 }

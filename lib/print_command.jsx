@@ -1,5 +1,6 @@
 // Pure parsing for the print-command CSV — no File/Window dependencies, so it can
-// be unit-tested under node --test as well as #included by nhap_ten_so.jsx.
+// be unit-tested under node --test as well as #included by nhap_ten_so.jsx and
+// xep_don_so_luong.jsx.
 
 // Minimal RFC-4180 CSV parser: handles quoted fields, escaped "" quotes,
 // embedded commas/newlines, and \r\n or \n line endings.
@@ -65,10 +66,11 @@ function parseOrders(text) {
 
     var rows = parseCsv(text);
 
-    var HDR_SIZE = 'size', HDR_SO = 'so', HDR_TEN_TREN = 'ten tren so', HDR_TEN_DUOI = 'ten duoi so', HDR_VARIANT = 'mau';
-    var headerRow = -1, sizeCol = -1, soCol = -1, tenTrenCol = -1, tenDuoiCol = -1, variantCol = -1;
+    var HDR_SIZE = 'size', HDR_SO = 'so', HDR_TEN_TREN = 'ten tren so', HDR_TEN_DUOI = 'ten duoi so', HDR_VARIANT = 'mau',
+        HDR_QUANTITY = 'so luong';
+    var headerRow = -1, sizeCol = -1, soCol = -1, tenTrenCol = -1, tenDuoiCol = -1, variantCol = -1, quantityCol = -1;
     for (var r = 0; r < rows.length && headerRow === -1; r++) {
-        var sCol = -1, nCol = -1, ttCol = -1, tdCol = -1, vCol = -1;
+        var sCol = -1, nCol = -1, ttCol = -1, tdCol = -1, vCol = -1, qCol = -1;
         for (var c = 0; c < rows[r].length; c++) {
             var key = foldAscii(rows[r][c]);
             if      (key === HDR_SIZE)     sCol  = c;
@@ -76,9 +78,11 @@ function parseOrders(text) {
             else if (key === HDR_TEN_TREN) ttCol = c;
             else if (key === HDR_TEN_DUOI) tdCol = c;
             else if (key === HDR_VARIANT)  vCol  = c;
+            else if (key === HDR_QUANTITY) qCol  = c;
         }
         if (sCol !== -1 && nCol !== -1) {
             headerRow = r; sizeCol = sCol; soCol = nCol; tenTrenCol = ttCol; tenDuoiCol = tdCol; variantCol = vCol;
+            quantityCol = qCol;
         }
     }
     if (headerRow === -1) throw new Error('Khong tim thay bang du lieu (thieu cot SIZE / SO) trong file CSV.');
@@ -92,7 +96,8 @@ function parseOrders(text) {
             number:    trimCell(rows[r], soCol),
             nameAbove: tenTrenCol !== -1 ? trimCell(rows[r], tenTrenCol) : '',
             nameBelow: tenDuoiCol !== -1 ? trimCell(rows[r], tenDuoiCol) : '',
-            variant:   variantCol !== -1 ? trimCell(rows[r], variantCol) : ''
+            variant:   variantCol !== -1 ? trimCell(rows[r], variantCol) : '',
+            quantity:  quantityCol !== -1 ? trimCell(rows[r], quantityCol) : ''
         });
     }
     return orders;
@@ -123,6 +128,23 @@ function groupOrdersBySize(orders, sizes) {
         if (!contains(sizes, o.size)) continue;
         if (!bySize[o.size]) bySize[o.size] = [];
         bySize[o.size].push(o);
+    }
+    return bySize;
+}
+
+// A quantity order (xep_don_so_luong.jsx): only sizes and how many of each, no numbers
+// or names. Each row stands for its Số lượng pieces — 1 when blank. Returns
+// { size: count }, dropping any size not in sizes. Throws on a Số lượng that isn't a
+// whole number.
+function quantityBySize(orders, sizes) {
+    var bySize = {};
+    for (var i = 0; i < orders.length; i++) {
+        var o = orders[i];
+        if (!contains(sizes, o.size)) continue;
+        if (o.quantity !== '' && !/^\d+$/.test(o.quantity)) {
+            throw new Error('So luong khong hop le: "' + o.quantity + '" (size ' + o.size + ').');
+        }
+        bySize[o.size] = (bySize[o.size] || 0) + (o.quantity === '' ? 1 : parseInt(o.quantity, 10));
     }
     return bySize;
 }

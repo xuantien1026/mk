@@ -42,12 +42,14 @@ function layoutNest(items, scale, timeLimit, root, recorder) {
 // When a size's shirt front (THAN_TRUOC) carries the number (SO), each order's front
 // and back are placed one right after the other. Returns [[front, back], ...] as
 // indices into items. An order with no number has its SO removed (nhap_ten_so.jsx), so
-// a front counts as numbered when any order's front of that size has an SO.
+// a front counts as numbered when any order's front of that size has an SO. Items with
+// no group (xep_don_so_luong.jsx: nested before they are made, and never numbered) are
+// never paired.
 function soPairs(items) {
     var hasSo = {};
     for (var i = 0; i < items.length; i++) {
         var it = items[i];
-        if (it.side !== 'FRONT' || hasSo[it.key]) continue;
+        if (it.side !== 'FRONT' || !it.group || hasSo[it.key]) continue;
         hasSo[it.key] = findAllItemsByName(it.group, SO).length > 0;
     }
     var front = {}, pairs = [];

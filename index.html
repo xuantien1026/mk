@@ -156,7 +156,9 @@
     <li><strong><code>nhay_size.jsx</code></strong> — Tạo bản thiết kế đã resize cho từng size. Sau đó người dùng có thể
       điều chỉnh thủ công trước khi chuyển sang bước 2.</li>
     <li><strong><code>nhap_ten_so.jsx</code></strong> — Nhập tên khách hàng &amp; số cho từng size, tạo bản in hoàn
-      chỉnh.</li>
+      chỉnh.<br>
+      Đơn chỉ có size và số lượng (không có số, tên): dùng <strong><code>xep_don_so_luong.jsx</code></strong>
+      thay cho bước này.</li>
   </ol>
 
   <hr>
@@ -361,6 +363,22 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
     <li>Ô <strong>Tên trên số</strong>, <strong>Tên dưới số</strong> hoặc <strong>Số</strong> có thể để trống
       (phần chữ tương ứng bị xóa khỏi áo).</li>
   </ul>
+
+  <h2>Đơn số lượng (bước 2 — <code>xep_don_so_luong.jsx</code>)</h2>
+
+  <p>Dùng cho đơn chỉ có size và số lượng, không có số và tên. Chạy trên file kết quả của
+    <code>nhay_size.jsx</code>, chọn file lệnh in CSV cùng định dạng như trên:</p>
+
+  <ul>
+    <li>Cột <code>Số lượng</code> (không bắt buộc): số chi tiết của dòng đó. Ô trống tính là 1, nên nếu không
+      có cột này thì mỗi dòng là một sản phẩm.</li>
+    <li>Các cột <code>Số</code>, <code>Tên trên số</code>, <code>Tên dưới số</code> bị bỏ qua — chữ
+      <code>SO</code>, <code>TEN_TREN</code>, <code>TEN_DUOI</code> bị xóa khỏi mọi chi tiết.</li>
+    <li>Script hỏi thời gian xếp tối ưu (giây, như <code>xep_toi_uu.jsx</code>).</li>
+  </ul>
+
+  <p>Script xếp tối ưu tất cả chi tiết cùng một lúc (như <code>xep_toi_uu.jsx</code>), rồi tạo bản in theo cách
+    xếp đó — không cần chạy <code>xep_toi_uu.jsx</code> nữa.</p>
 
 </body>
 

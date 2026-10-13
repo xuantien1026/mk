@@ -19,7 +19,7 @@ function makeNestEnv() {
 }
 
 test('every .jsx file parses as ES3-era JavaScript (after its # directives)', function () {
-    const files = ['nhap_ten_so.jsx', 'nhay_size.jsx', 'xep_nhanh.jsx', 'xep_toi_uu.jsx']
+    const files = ['nhap_ten_so.jsx', 'xep_don_so_luong.jsx', 'nhay_size.jsx', 'xep_nhanh.jsx', 'xep_toi_uu.jsx']
         .concat(fs.readdirSync(path.join(ROOT, 'lib')).filter((f) => f.endsWith('.jsx')).map((f) => 'lib/' + f))
         .concat(fs.readdirSync(path.join(ROOT, 'tools')).filter((f) => f.endsWith('.jsx')).map((f) => 'tools/' + f));
     for (const f of files) {
@@ -57,6 +57,12 @@ test('soPairs pairs each order’s front and back when the front design carries 
         item('M', 2, 'FRONT', false), item('M', 2, 'BACK', true)
     ];
     assert.deepEqual(JSON.parse(JSON.stringify(env.soPairs(items))), [[0, 1], [3, 4]]);
+});
+
+test('soPairs never pairs parts without a group (xep_don_so_luong.jsx)', function () {
+    const env = makeNestEnv();
+    const items = [{ key: 'S_FRONT', sz: 'S', n: 1, side: 'FRONT' }, { key: 'S_BACK', sz: 'S', n: 1, side: 'BACK' }];
+    assert.equal(env.soPairs(items).length, 0);
 });
 
 // The engine-2 path minus Illustrator: buildNestJob (as layoutNest calls it) on fake

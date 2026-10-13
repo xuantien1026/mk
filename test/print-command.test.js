@@ -197,3 +197,35 @@ test('parseOrders matches the Tên dưới số header regardless of accent/case
         assert.equal(orders[0].nameAbove, '');
     }
 });
+
+test('parseOrders reads the Số lượng column, blank when absent', function () {
+    const { parseOrders } = makePrintEnv();
+    const orders = parseOrders(csv([
+        ['STT', 'TÊN TRÊN SỐ', 'SỐ', 'TÊN DƯỚI SỐ', 'SIZE', 'SỐ LƯỢNG', 'FORM', 'MẪU'],
+        ['1', '', '', '', 'M', '5', 'NỮ', '1'],
+        ['2', '', '', '', 'L', '', '', '1']
+    ]));
+    assert.deepEqual(Array.from(orders).map(function (o) { return o.quantity; }), ['5', '']);
+    assert.equal(parseOrders(csv([['SIZE', 'SỐ'], ['m', '1']]))[0].quantity, '');
+});
+
+test('quantityBySize sums each size’s Số lượng, a blank one counting 1', function () {
+    const { parseOrders, quantityBySize } = makePrintEnv();
+    const orders = parseOrders(csv([
+        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ', 'SỐ LƯỢNG'],
+        ['m', '9', 'Alice', '3'],
+        ['l', '',  '',      ''],
+        ['m', '',  '',      '2'],
+        ['s', '',  '',      '0'],
+        ['xl', '', '',      '4']   // not prepared — dropped
+    ]));
+    assert.deepEqual({ ...quantityBySize(orders, ['S', 'M', 'L']) }, { M: 5, L: 1, S: 0 });
+});
+
+test('quantityBySize throws on a Số lượng that is not a whole number', function () {
+    const { parseOrders, quantityBySize } = makePrintEnv();
+    for (const bad of ['abc', '2.5', '-1']) {
+        const orders = parseOrders(csv([['SIZE', 'SỐ', 'SỐ LƯỢNG'], ['m', '', bad]]));
+        assert.throws(() => quantityBySize(orders, ['M']), bad);
+    }
+});
