@@ -11,11 +11,14 @@
 var NESTER_SETUP_ALLOWANCE = 60 * 60; // seconds
 
 // root: the scripts folder (the one holding nester/). Uses nester/nest.exe when
-// bundled, otherwise Node from the PATH.
+// bundled, else the portable nester/node.exe that the release zip ships with (see
+// .github/workflows/release.yml), else Node from the PATH.
 function nesterCommand(root) {
     var exe = new File(root + '/nester/nest.exe');
     if (exe.exists) return '"' + exe.fsName + '"';
-    return 'node "' + new File(root + '/nester/cli.js').fsName + '"';
+    var node = new File(root + '/nester/node.exe');
+    var cli = '"' + new File(root + '/nester/cli.js').fsName + '"';
+    return (node.exists ? '"' + node.fsName + '"' : 'node') + ' ' + cli;
 }
 
 // The most telling line of an error output: the first "...Error..." line, else the first.
@@ -62,7 +65,7 @@ function runNester(job, root, onPoll) {
         if (error.exists) throw new Error('Bộ xếp hình (nester) lỗi:\n' + errorLine(readTextFile(error)));
         if (failed.exists) {
             $.sleep(200); // let cmd finish writing stderr
-            throw new Error('Không chạy được bộ xếp hình (nester). Máy đã cài Node.js và chạy "npm install" chưa?\n'
+            throw new Error('Không chạy được bộ xếp hình (nester). Hãy tải lại bản MK.zip mới nhất.\n'
                 + errorLine(readTextFile(new File(path('stderr.txt')))));
         }
         var now = (new Date()).getTime();
