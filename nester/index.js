@@ -6,7 +6,7 @@
 //     shapes: { key: { w, h, pad, rings } }, parts: [{ shape: key }],
 //     pairs?: [[a, b], ...] — parts placed one right after the other,
 //     stages?: [stage, ...] — one per part, placed lowest stage first, see pairs.js }
-// Result: { sheets, fitness, placements: [{ part, sheet, x, y, rot }] } — (x, y) is the
+// Result: { sheets, fitness, evaluations (layouts tried), placements: [{ part, sheet, x, y, rot }] } — (x, y) is the
 // top-left of the part's visible box on its sheet after turning it rot° about the box's
 // center.
 const { createContext, placeAll, toResult } = require('./place');
@@ -27,7 +27,7 @@ async function nest(job, opts = {}) {
             patience: opts.patience,
             onProgress: opts.onProgress
         });
-        return toResult(ctx, best);
+        return Object.assign(toResult(ctx, best), { evaluations: best.evaluations });
     } finally {
         if (pool) await pool.close();
     }

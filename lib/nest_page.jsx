@@ -49,7 +49,8 @@ function nestableParts(doc) {
 // Nest the parts items (nestableParts) of print page doc onto as few sheets as the
 // nester finds in options.timeLimit seconds, rearranging doc in place. Records the run to
 // root/debug/last_nest/ (nest_record.jsx). options: askNestOptions's, see layoutNest.
-// Returns { before, after } sheet counts.
+// Returns { before, after } sheet counts, the layout applied and the nester's evaluations
+// (layouts tried).
 function nestPage(doc, items, root, options) {
     var scale = doc.scaleFactor || 1;
     var before = doc.artboards.length;
@@ -62,5 +63,5 @@ function nestPage(doc, items, root, options) {
             return { outline: p.data.outline, rect: doc.artboards[p.sheet.index].artboardRect };
         });
     });
-    return { before: before, after: layout.sheets.length };
+    return { before: before, after: layout.sheets.length, layout: layout, evaluations: layout.evaluations };
 }

@@ -6,7 +6,7 @@
 // shape, outline is its cut outline in a document whose units are 1/scale of real pt.
 // Shows a progress window while the nester runs: about timeLimit seconds, plus minutes
 // beforehand for a design with many sizes. Returns { sheets, placements: [{ sheet, x,
-// y, rot, data }] } like layoutSequential, with data the item and rot (0/180) to turn
+// y, rot, data }], evaluations (layouts the nester tried) } like layoutSequential, with data the item and rot (0/180) to turn
 // the part about its center first. recorder (optional, see nest_record.jsx) gets the
 // nester's job and result. options: { timeLimit, shirtsFirst, bySize } (see
 // askNestOptions and nestStages).
@@ -103,5 +103,5 @@ function nestResultToLayout(result, items) {
         var pl = result.placements[i];
         placements.push({ sheet: sheets[pl.sheet], x: pl.x, y: pl.y, rot: pl.rot, data: items[pl.part] });
     }
-    return { sheets: sheets, placements: placements };
+    return { sheets: sheets, placements: placements, evaluations: result.evaluations };
 }

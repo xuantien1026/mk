@@ -142,7 +142,7 @@ function pick(population, random, exclude) {
 // `patience` generations bring no improvement.
 //   evaluate(listOfGenes) → Promise<[{ fitness, ... }]> (same order)
 //   onProgress({ generation, evaluations, best, elapsedMs }) after every generation
-// Resolves to the best evaluation, with its genes.
+// Resolves to the best evaluation, with its genes and the number of evaluations made.
 async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSize = 10, mutationRate = 0.1,
                              patience = 200, seed = 1, onProgress } = {}) {
     const random = makeRandom(seed);
@@ -179,7 +179,7 @@ async function search(job, { evaluate, areaOf, timeLimitMs = 60000, populationSi
         if (population[0].fitness < best.fitness - 1e-9) { best = population[0]; stale = 0; } else stale++;
         if (onProgress) onProgress({ generation, evaluations, best, elapsedMs: Date.now() - start });
     }
-    return best;
+    return Object.assign({}, best, { evaluations });
 }
 
 module.exports = { search, seeds, mutate, crossover, makeRandom };

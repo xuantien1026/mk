@@ -31,7 +31,9 @@ function main() {
     if (options === null) return;
 
     var nested = nestPage(doc, items, SCRIPT_DIR, options);
-    alert('Đã xếp lại ' + items.length + ' chi tiết: ' + nested.before + ' → ' + nested.after + ' tấm in.');
+    trimSheetBottoms(doc, nested.layout);
+    alert('Đã xếp lại ' + items.length + ' chi tiết: ' + nested.before + ' → ' + nested.after + ' tấm in.'
+        + (nested.evaluations ? '\nĐã thử ' + nested.evaluations + ' cách xếp.' : ''));
 }
 
 try {
