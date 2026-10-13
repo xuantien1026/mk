@@ -53,7 +53,7 @@ function fakeDoc(groups, artboardNames) {
 test('parseInstanceName reads {size}_{n}_{side} and ignores anything else', function () {
     const env = makeOutputEnv();
     assert.deepEqual({ ...env.parseInstanceName('2XL_12_LEFT_PANT_1') }, { sz: '2XL', n: 12, side: 'LEFT_PANT_1' });
-    assert.deepEqual({ ...env.parseInstanceName('1_3_FRONT') }, { sz: '1', n: 3, side: 'FRONT' });
+    assert.deepEqual({ ...env.parseInstanceName('1 KID_3_FRONT') }, { sz: '1 KID', n: 3, side: 'FRONT' });
     assert.equal(env.parseInstanceName('M_FRONT'), null);        // a Step-1 master, no order number
     assert.equal(env.parseInstanceName('M_1_COLLAR'), null);     // unknown side
     assert.equal(env.parseInstanceName('XXL_1_FRONT'), null);    // unknown size
