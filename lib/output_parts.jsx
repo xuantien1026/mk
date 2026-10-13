@@ -2,7 +2,7 @@
 // (xep_nhanh.jsx, xep_toi_uu.jsx). Needs SIZES (config.jsx), requireItem (utils.jsx),
 // sheetGridAt (sheet_layout.jsx).
 //
-// A print page's PRINT_OUTPUT layer holds one group per printed part, named
+// A print page has a single layer, holding one group per printed part, named
 // {size}_{n}_{side} (n = the order's number within its size), which holds
 // {name}_OUTLINE (the cut line) and {name}_FINAL (the design). Its artboards are the
 // sheets.
@@ -42,7 +42,7 @@ function sortPrintOrder(items) {
 // the part's shape), sz, n, side, label, group, outline, w, h } — w × h the outline's
 // visible box (stroke included) in real pt; scale = real pt per document unit.
 function readOutputParts(doc, scale) {
-    var layer = requireItem(doc.layers, 'PRINT_OUTPUT', doc.name);
+    var layer = doc.layers[0];
     var items = [];
     for (var i = 0; i < layer.pageItems.length; i++) {
         var g = layer.pageItems[i];

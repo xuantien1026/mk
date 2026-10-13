@@ -15,7 +15,7 @@ function main() {
     var doc = app.activeDocument;
     var scale = doc.scaleFactor || 1;
     var items = readOutputParts(doc, scale);
-    if (!items.length) { alert('Không có chi tiết nào trong layer PRINT_OUTPUT. Hãy chạy nhap_ten_so.jsx hoặc xep_don_so_luong.jsx trước.'); return; }
+    if (!items.length) { alert('Không có chi tiết nào trong trang in. Hãy chạy nhap_ten_so.jsx hoặc xep_don_so_luong.jsx trước.'); return; }
 
     var parts = [], sleeves = [];
     for (var i = 0; i < items.length; i++) {

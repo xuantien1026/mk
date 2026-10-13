@@ -25,7 +25,7 @@ var SCRIPT_DIR = new File($.fileName).parent.fsName;
 function main() {
     var doc = app.activeDocument;
     var items = nestableParts(doc);
-    if (!items.length) { alert('Không có chi tiết nào trong layer PRINT_OUTPUT. Hãy chạy nhap_ten_so.jsx trước.'); return; }
+    if (!items.length) { alert('Không có chi tiết nào trong trang in. Hãy chạy nhap_ten_so.jsx trước.'); return; }
 
     var options = askNestOptions(items);
     if (options === null) return;

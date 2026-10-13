@@ -185,14 +185,16 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
         function u(realPt) { return realPt / scale; } // real pt → this document's units
         var grid = sheetGrid(doc.artboards[0].artboardRect, scale, sheets.length);
 
+        // The parts go in the template's own layer: once the masters layer is gone it
+        // is the page's only layer, which the layout engines read.
+        var outLayer = doc.layers[0];
+
         // Bring over every master part once, so the per-order duplicates below are
         // same-document (fast).
         var mastersLayer = doc.layers.add();
         mastersLayer.name = 'MASTERS';
         var masters = pasteParts(sourceDoc, doc, mastersLayer, keys, scale);
 
-        var outLayer = doc.layers.add();
-        outLayer.name = 'PRINT_OUTPUT';
 
         // Duplicate one master part for an order and fill in its texts. Returns the
         // instance group: its _OUTLINE, then its _FINAL.
