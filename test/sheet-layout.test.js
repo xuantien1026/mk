@@ -108,3 +108,30 @@ test('sheetName zero-pads to at least two digits and to the total width', functi
     assert.equal(env.sheetName(3, 120), '003');
     assert.equal(env.sheetName(120, 120), '120');
 });
+
+function box(left, top, w, h) { return { left: left * CM, top: top * CM, width: w * CM, height: h * CM }; }
+function round(pos) { return Array.from(pos).map(function (p) { return [Math.round(p.x / CM), Math.round(p.y / CM)]; }); }
+
+test('productLayout keeps the Step-1 layout when it fits the sheet width', function () {
+    const env = makeSheetEnv();
+    const l = env.productLayout([box(10, 100, 60, 80), box(80, 100, 60, 80), box(150, 90, 9, 30)]);
+    assert.equal(Math.round(l.width / CM), 149);
+    assert.equal(Math.round(l.height / CM), 80);
+    assert.deepEqual(round(l.pos), [[0, 0], [70, 0], [140, 10]]);
+});
+
+test('productLayout wraps parts into rows when the Step-1 layout is too wide', function () {
+    const env = makeSheetEnv();
+    // front | back | sleeve | sleeve = 70 + 70 + 30 + 30 (+ gaps) > 159cm
+    const boxes = [box(0, 0, 70, 90), box(80, 0, 70, 90), box(160, 0, 30, 50), box(200, 0, 30, 50)];
+    const l = env.productLayout(boxes);
+    const g = env.PRODUCT_GAP;
+    assert.ok(l.width <= env.SHEET_W);
+    assert.equal(l.pos[0].x, 0);
+    assert.equal(l.pos[1].x, 70 * CM + g);
+    assert.equal(l.pos[2].y, 90 * CM + g);      // first sleeve starts row 2
+    assert.equal(l.pos[2].x, 0);
+    assert.equal(l.pos[3].x, 30 * CM + g);
+    assert.equal(l.pos[3].y, 90 * CM + g);
+    assert.equal(l.height, 90 * CM + g + 50 * CM);
+});

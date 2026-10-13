@@ -103,12 +103,13 @@ function main() {
         for (var t = 0; t < KINDS.length; t++) {
             var sides = productSides(sourceDoc, KINDS[t].kind, sz);
             if (sides.length === 0) continue;
-            var block = productBlock(sourceDoc, sz, sides);
-            checkFits(block, KINDS[t].label + ' size ' + sz);
+            var boxes = productBoxes(sourceDoc, sz, sides);
+            for (var b = 0; b < boxes.length; b++) checkFits(boxes[b], KINDS[t].label + ' size ' + sz + ' ' + sides[b]);
+            var layout = productLayout(boxes); // wraps into rows when wider than a sheet
             for (var q = 0; q < list.length; q++) {
-                var slot = packer.place(block.height);
+                var slot = packer.place(layout.height);
                 placements.push({ sheet: slot.sheet, offset: slot.offset, kind: KINDS[t].kind, sz: sz, sides: sides,
-                                  prefix: sz + '_' + (q + 1), order: list[q] });
+                                  layout: layout, prefix: sz + '_' + (q + 1), order: list[q] });
             }
         }
     }
@@ -168,23 +169,20 @@ function main() {
             return g;
         }
 
-        // Duplicate a product's parts and translate them as one block into its slot:
-        // horizontally centered in the sheet, top at the slot top. The parts keep their
-        // Step-1 relative layout.
+        // Duplicate a product's parts and move each to its place in the product's block
+        // (p.layout): the block horizontally centered in the sheet, top at the slot top.
         function buildProduct(p) {
-            var parts = [], boxes = [];
+            var r    = grid.rect(p.sheet);
+            var left = r[0] + u((SHEET_W - p.layout.width) / 2);
+            var top  = r[1] - u(p.offset);
             for (var i = 0; i < p.sides.length; i++) {
-                parts.push(dupPart(p.sz, p.sides[i], p.prefix + '_' + p.sides[i], p.order));
-                boxes.push(partBounds(parts[i]));
-            }
-            var bb = unionBounds(boxes);
-            var r  = grid.rect(p.sheet);
-            var dx = (r[0] + (u(SHEET_W) - bb.width) / 2) - bb.left;
-            var dy = (r[1] - u(p.offset)) - bb.top;
-            // Each part is the _FINAL clip group; its parent is the _OUTLINE+_FINAL
-            // instance group. Moving the parent translates outline and design together.
-            for (var j = 0; j < parts.length; j++) {
-                var ig = parts[j].parent;
+                var part = dupPart(p.sz, p.sides[i], p.prefix + '_' + p.sides[i], p.order);
+                var box  = partBounds(part);
+                var dx   = (left + u(p.layout.pos[i].x)) - box.left;
+                var dy   = (top  - u(p.layout.pos[i].y)) - box.top;
+                // Each part is the _FINAL clip group; its parent is the _OUTLINE+_FINAL
+                // instance group. Moving the parent translates outline and design together.
+                var ig = part.parent;
                 ig.position = [ig.position[0] + dx, ig.position[1] + dy];
             }
         }

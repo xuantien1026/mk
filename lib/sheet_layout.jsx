@@ -36,6 +36,30 @@ function checkFits(block, label) {
     }
 }
 
+// Where a product's parts go within its block (nhap_ten_so.jsx). boxes are the parts'
+// Step-1 bounds, { left, top, width, height } in real pt. When the Step-1 layout fits the
+// sheet width, the parts keep it; otherwise (big sizes, where front | back | sleeves or
+// the pant pieces in one row are wider than a sheet) they wrap into rows, in order, left
+// to right with PRODUCT_GAP between them. Returns { width, height, pos } where pos[i] =
+// { x, y } is part i's top-left, measured from the block's top-left (y downwards).
+function productLayout(boxes) {
+    var bb = unionBounds(boxes), pos = [], i;
+    if (bb.width <= SHEET_W) {
+        for (i = 0; i < boxes.length; i++) pos.push({ x: boxes[i].left - bb.left, y: bb.top - boxes[i].top });
+        return { width: bb.width, height: bb.height, pos: pos };
+    }
+    var x = 0, y = 0, rowH = 0, width = 0;
+    for (i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        if (x > 0 && x + b.width > SHEET_W) { y += rowH + PRODUCT_GAP; x = 0; rowH = 0; }
+        pos.push({ x: x, y: y });
+        if (x + b.width > width) width = x + b.width;
+        if (b.height > rowH) rowH = b.height;
+        x += b.width + PRODUCT_GAP;
+    }
+    return { width: width, height: y + rowH, pos: pos };
+}
+
 // The n-th sheet (0-based) of a layout. Sheets fill a page's grid row by row; a full page
 // starts a new page (output document).
 function makeSheet(n) {

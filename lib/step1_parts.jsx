@@ -59,10 +59,9 @@ function partBoundsByName(doc, name) {
     return partBounds(requireItem(doc.pageItems, name, doc.name));
 }
 
-// A product's footprint = the union of its parts' Step-1 bounds, so the parts keep the
-// layout Step 1 produced. Needs unionBounds (sheet_layout.jsx).
-function productBlock(doc, sz, sides) {
+// A product's parts' Step-1 bounds, one per side, for productLayout (sheet_layout.jsx).
+function productBoxes(doc, sz, sides) {
     var boxes = [];
     for (var i = 0; i < sides.length; i++) boxes.push(partBoundsByName(doc, sz + '_' + sides[i] + '_FINAL'));
-    return unionBounds(boxes);
+    return boxes;
 }
