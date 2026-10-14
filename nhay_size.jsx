@@ -540,12 +540,28 @@ function main() {
     var bgWidth    = 1.6 * 1000 * PT_PER_MM;
     var spacing    = 3 * PT_PER_MM;       // 3mm gap between adjacent designs
     var padding    = spacing / 2;         // row margin: gap between rows/sizes = 2*padding = 3mm
-    // Anchor the output to the top edge of the output artboard so the vertical stack
-    // has maximum room before hitting Illustrator's pasteboard coordinate limit (the
-    // point where geometry gets clamped, which corrupts the lower sizes).
-    var bgLeft     = outDoc.artboards[0].artboardRect[0];
-    var bgTop      = outDoc.artboards[0].artboardRect[1];
+    // Rows stack down from the artboard's top edge, in columns bgWidth wide: a row that
+    // would pass the artboard's bottom starts a new column to the right. Nothing may go
+    // past the artboard — beyond Illustrator's canvas edge (just outside it) an item's
+    // visibleBounds/geometricBounds get pinned to the edge, and the layout engines,
+    // which measure parts by those bounds, then pile them on top of each other.
+    var outRect    = outDoc.artboards[0].artboardRect;
+    var columnGap  = 10 * 10 * PT_PER_MM; // 10cm between columns
+    var bgLeft     = outRect[0];
+    var bgTop      = outRect[1];
     var currentTop = bgTop;
+
+    // Make room for a row rowHeight tall: wrap to the next column when it would pass
+    // the artboard's bottom.
+    function fitRow(rowHeight) {
+        if (currentTop - rowHeight >= outRect[3] || currentTop === bgTop) return;
+        bgLeft += bgWidth + columnGap;
+        currentTop = bgTop;
+        if (bgLeft + bgWidth > outRect[2]) {
+            throw new Error('Quá nhiều size cho một file (vượt quá khổ 575cm × 575cm của Illustrator). '
+                + 'Hãy chọn ít size hơn.');
+        }
+    }
 
     for (var s = 0; s < options.sizes.length; s++) {
         var sz = options.sizes[s];
@@ -571,6 +587,7 @@ function main() {
                 var sleeveColWidth  = Math.max(lSlvVB.width, rSlvVB.width);
                 var row1Height      = Math.max(frontVB.height, backVB.height, sleeveColHeight) + padding * 2;
                 var row1Width       = frontVB.width + spacing + backVB.width + spacing + sleeveColWidth;
+                fitRow(row1Height);
                 var row1StartX      = bgLeft + (bgWidth - row1Width) / 2;
                 var sleeveColX      = row1StartX + frontVB.width + spacing + backVB.width + spacing;
                 var sleeveColTop    = currentTop - (row1Height - sleeveColHeight) / 2;
@@ -588,6 +605,7 @@ function main() {
                 // Sleeveless (e.g. basketball jersey): row 1 is just front and back side by side.
                 var row1Height = Math.max(frontVB.height, backVB.height) + padding * 2;
                 var row1Width  = frontVB.width + spacing + backVB.width;
+                fitRow(row1Height);
                 var row1StartX = bgLeft + (bgWidth - row1Width) / 2;
 
                 moveWithOutline(frontGrp, row1StartX,                           currentTop - (row1Height - frontVB.height) / 2);
@@ -635,6 +653,7 @@ function main() {
                 rowW += vbs[pi].width + (pi > 0 ? spacing : 0);
             }
             var rowH = maxH + padding * 2;
+            fitRow(rowH);
             var rowStartX = bgLeft + (bgWidth - rowW) / 2, px = rowStartX;
             // Align the pieces on their bottom edge (padding above the row bottom),
             // rather than centering them vertically.
