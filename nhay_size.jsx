@@ -262,19 +262,51 @@ function flattenSegments(pathItem, steps, segs) {
     return segs;
 }
 
-// Leftmost/rightmost x where the (flattened) shape crosses the horizontal line y = Y,
-// i.e. the shape's true horizontal extent at that height. Null if it doesn't reach Y.
-function spanAtY(segs, Y) {
-    var min = null, max = null;
+// The parts of the horizontal line y = Y that lie inside the (flattened) shape, as
+// sorted [left, right] pairs (even-odd rule). A bottom that curves upward yields
+// several pairs near the bottom — e.g. the two corners either side of the arch.
+function intervalsAtY(segs, Y) {
+    var xs = [];
     for (var i = 0; i < segs.length; i++) {
         var a = segs[i][0], b = segs[i][1], ya = a[1], yb = b[1];
         if ((ya <= Y && Y < yb) || (yb <= Y && Y < ya)) {
-            var x = a[0] + (b[0] - a[0]) * (Y - ya) / (yb - ya);
-            if (min === null || x < min) min = x;
-            if (max === null || x > max) max = x;
+            xs.push(a[0] + (b[0] - a[0]) * (Y - ya) / (yb - ya));
         }
     }
-    return (min === null) ? null : { left: min, right: max };
+    xs.sort(function (p, q) { return p - q; });
+    var out = [];
+    for (var j = 0; j + 1 < xs.length; j += 2) out.push([xs[j], xs[j + 1]]);
+    return out;
+}
+
+// Horizontal room around x that stays inside the shape for every y in [y0, y1]
+// (sampled on `lines` + 1 scanlines). Null if x falls outside the shape anywhere.
+function roomAround(segs, x, y0, y1, lines) {
+    var left = -Infinity, right = Infinity;
+    for (var k = 0; k <= lines; k++) {
+        var ivs = intervalsAtY(segs, y0 + (y1 - y0) * k / lines), iv = null;
+        for (var i = 0; i < ivs.length; i++) {
+            if (ivs[i][0] <= x && x <= ivs[i][1]) { iv = ivs[i]; break; }
+        }
+        if (!iv) return null;
+        if (iv[0] > left)  left  = iv[0];
+        if (iv[1] < right) right = iv[1];
+    }
+    return { left: left, right: right };
+}
+
+// Center x of the shape's lowest points (within tol of bottomY). For a flat hem it's the
+// hem's middle; for a hem arching upward it's midway between the two low corners.
+function bottomCenterX(segs, bottomY, tol) {
+    var min = null, max = null;
+    for (var i = 0; i < segs.length; i++) {
+        var p = segs[i][0];
+        if (p[1] <= bottomY + tol) {
+            if (min === null || p[0] < min) min = p[0];
+            if (max === null || p[0] > max) max = p[0];
+        }
+    }
+    return (min === null) ? null : (min + max) / 2;
 }
 
 // Black or white in the document's color space.
@@ -314,18 +346,31 @@ function placeSizeLabel(sizeName, maskShape, designCopy, doc, parkLayer) {
     var label = makeSizeLabel(sizeName, parkLayer);
     scaleSizeLabel(label);
 
-    var maskBottom   = maskShape.position[1] - maskShape.height;
-    var glyphBottomY = maskBottom + SIZE_BOTTOM_GAP;
+    var gap        = SIZE_BOTTOM_GAP;
+    var labelW     = glyphWidth(label);
+    var maskBottom = maskShape.position[1] - maskShape.height;
+    var maskMidY   = maskShape.position[1] - maskShape.height / 2;
 
-    // The bottom of a piece (a sleeve especially) can be narrower than its bounding box,
-    // so center on the shape's ACTUAL span at the label's height, not the box center.
+    // The bottom of a piece isn't always its bounding box: a sleeve narrows, and a hem
+    // can curve upward so its middle sits well above the box bottom. Start at the box
+    // bottom and step up until the label (plus `gap` on every side) fits inside the
+    // actual shape, centered on the shape's span at that height.
     var segs = [], paths = collectPaths(maskShape);
     for (var i = 0; i < paths.length; i++) flattenSegments(paths[i], 24, segs);
-    var span    = spanAtY(segs, maskBottom + SIZE_BOTTOM_GAP + SIZE_GLYPH_HEIGHT / 2);
-    var centerX = span ? (span.left + span.right) / 2
-                       : maskShape.position[0] + maskShape.width / 2;
+    var refX = bottomCenterX(segs, maskBottom, 1 * PT_PER_MM);
+    if (refX === null) refX = maskShape.position[0] + maskShape.width / 2;
 
-    placeLabelGlyphs(label, centerX - glyphWidth(label) / 2, glyphBottomY);
+    var glyphBottomY = maskBottom + gap, centerX = refX;
+    for (var y = maskBottom + gap; y <= maskMidY; y += 0.5 * PT_PER_MM) {
+        var room = roomAround(segs, refX, y - gap, y + SIZE_GLYPH_HEIGHT + gap, 8);
+        if (room && room.right - room.left >= labelW + 2 * gap) {
+            glyphBottomY = y;
+            centerX      = (room.left + room.right) / 2;
+            break;
+        }
+    }
+
+    placeLabelGlyphs(label, centerX - labelW / 2, glyphBottomY);
 
     var ca = label.textRange.characterAttributes;
     ca.fillColor     = blackOrWhite(doc, true);
