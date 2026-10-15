@@ -713,6 +713,18 @@ function main() {
         }
     }
 
+    // Carry the design's vector digit set (if any) into the Step-1 document so the print
+    // step can build each SO from it. It goes below the last row, inside the artboard
+    // like everything else (off-canvas items report clamped bounds).
+    if (hasItem(mainDoc.pageItems, SO_VECTOR)) {
+        var soVector = mainDoc.pageItems.getByName(SO_VECTOR).duplicate(outputLayer, ElementPlacement.PLACEATEND);
+        var svb      = soVector.visibleBounds;
+        var soRowH   = (svb[1] - svb[3]) + padding * 2;
+        fitRow(soRowH);
+        soVector.position = [bgLeft + padding, currentTop - padding];
+        currentTop -= soRowH;
+    }
+
     app.activeDocument = outDoc;
     alert('Hoàn thành nhảy size. Bạn có thể chỉnh sửa thiết kế, sau đó chạy bước tiếp theo: nhap_ten_so.jsx');
 }

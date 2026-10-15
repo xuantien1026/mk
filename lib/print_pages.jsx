@@ -35,6 +35,93 @@ function applyField(container, fieldName, value, maxW) {
     }
 }
 
+// Gap between the digits of a vector SO, as a fraction of the number's tallest digit.
+var SO_DIGIT_GAP = 0.1;
+
+// The prepared digits of a pasted SO_VECTOR group (validate.jsx checks the design has
+// them all): { '0': { item, bounds }, … }, bounds the digit's visibleBounds.
+function soDigits(soVector) {
+    var digits = {};
+    for (var d = 0; d <= 9; d++) {
+        var item = requireItem(soVector.pageItems, String(d), SO_VECTOR);
+        digits[d] = { item: item, bounds: item.visibleBounds };
+    }
+    return digits;
+}
+
+// The SO text frames inside container, in findAllItemsByName order.
+function soTextFrames(container) {
+    var all = findAllItemsByName(container, SO), frames = [];
+    for (var i = 0; i < all.length; i++) if (all[i].typename === 'TextFrame') frames.push(all[i]);
+    return frames;
+}
+
+// The box each SO text frame in container marks out for a vector number, in
+// soTextFrames order: its visible glyphs (the frame's own box reaches the font's
+// ascender and descender lines), or the frame's box when it has no glyphs to outline.
+function soBoxes(container) {
+    var frames = soTextFrames(container), boxes = [];
+    for (var i = 0; i < frames.length; i++) {
+        var box = frames[i].geometricBounds;
+        try {
+            var outlined = frames[i].duplicate().createOutline();
+            var vb = outlined.visibleBounds;
+            outlined.remove();
+            if (vb[2] - vb[0] > 0 && vb[1] - vb[3] > 0) box = vb;
+        } catch (e) { /* empty text: keep the frame's box */ }
+        boxes.push(box);
+    }
+    return boxes;
+}
+
+// The vector counterpart of applyField for SO: replace each SO text frame in container
+// with value built from digits (soDigits), fitted inside the frame's box (boxes, from
+// soBoxes on the master container was duplicated from — the same place, as it hasn't
+// moved yet) and centered on it; or remove the frames when value is empty.
+function applyVectorNumber(container, value, digits, boxes) {
+    var frames = soTextFrames(container);
+    for (var i = 0; i < frames.length; i++) {
+        var f = frames[i];
+        if (value !== null && value !== '') {
+            var num = buildVectorNumber(value, digits, f.layer, boxes[i]);
+            num.move(f, ElementPlacement.PLACEBEFORE);
+        }
+        f.remove();
+    }
+}
+
+// A group named SO of value's digits side by side, bottoms aligned, scaled uniformly
+// to the largest size that fits inside box ([left, top, right, bottom]) and centered
+// on it. Built in layer, starting at the box so it stays on the canvas.
+function buildVectorNumber(value, digits, layer, box) {
+    var chars = String(value).split(''), h = 0, i, b;
+    for (i = 0; i < chars.length; i++) {
+        if (!/^[0-9]$/.test(chars[i])) {
+            throw new Error('Số "' + value + '" có ký tự không phải chữ số — bộ số vector ('
+                + SO_VECTOR + ') chỉ có các số 0–9.');
+        }
+        b = digits[chars[i]].bounds;
+        if (b[1] - b[3] > h) h = b[1] - b[3];
+    }
+
+    var group = layer.groupItems.add();
+    group.name = SO;
+    var x = box[0];
+    for (i = 0; i < chars.length; i++) {
+        b = digits[chars[i]].bounds;
+        var d = digits[chars[i]].item.duplicate(group, ElementPlacement.PLACEATEND);
+        d.translate(x - b[0], box[3] - b[3]);
+        x += (b[2] - b[0]) + SO_DIGIT_GAP * h;
+    }
+
+    var vb = group.visibleBounds;
+    var s  = Math.min((box[2] - box[0]) / (vb[2] - vb[0]), (box[1] - box[3]) / (vb[1] - vb[3])) * 100;
+    group.resize(s, s, true, true, true, true, true, Transformation.CENTER);
+    vb = group.visibleBounds;
+    group.translate((box[0] + box[2]) / 2 - (vb[0] + vb[2]) / 2, (box[1] + box[3]) / 2 - (vb[1] + vb[3]) / 2);
+    return group;
+}
+
 // Everything a print run needs before building: the sizes Step 1 prepared in sourceDoc,
 // the Large Canvas template (in scriptDir/lib), and the chosen CSV's rows — only the
 // chosen FORM's when it has NỮ rows, and only the chosen Mẫu's when it mixes several. Alerts and returns null when something is
@@ -202,7 +289,12 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
         // same-document (fast).
         var mastersLayer = doc.layers.add();
         mastersLayer.name = 'MASTERS';
-        var masters = pasteParts(sourceDoc, doc, mastersLayer, keys, scale);
+        // When Step 1 carried a vector digit set (SO_VECTOR) over from the design, every
+        // SO is built from it instead of being filled in as text.
+        var vectorSo = itemExists(sourceDoc, SO_VECTOR);
+        var masters  = pasteParts(sourceDoc, doc, mastersLayer, keys, scale, vectorSo ? [SO_VECTOR] : []);
+        var digits   = vectorSo ? soDigits(requireItem(doc.pageItems, SO_VECTOR, doc.name)) : null;
+        var boxesByKey = {}; // master key → its soBoxes, measured once
 
 
         // Duplicate one master part for an order and fill in its texts. Returns the
@@ -213,7 +305,13 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
             var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
             var maxW = CUSTOMER_NAME_MAX_WIDTH[sz] ? u(CUSTOMER_NAME_MAX_WIDTH[sz]) : null;
             applyField(g, TEN, order.nameAbove, maxW);
-            applyField(g, SO,  order.number,    null);
+            if (digits) {
+                var key = sz + '_' + side;
+                if (!boxesByKey[key]) boxesByKey[key] = soBoxes(m.design);
+                applyVectorNumber(g, order.number, digits, boxesByKey[key]);
+            } else {
+                applyField(g, SO, order.number, null);
+            }
 
             // Keep each part-instance's _OUTLINE and _FINAL together as a single group,
             // the same way Step 1 does, so they read as one unit in the print output.

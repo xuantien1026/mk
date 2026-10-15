@@ -205,7 +205,13 @@
       </tr>
       <tr>
         <td><code>SO</code></td>
-        <td>Text frame chứa số áo (có thể bỏ trống)</td>
+        <td>Text frame chứa số áo (có thể bỏ trống). Khi file có <code>SO_VECTOR</code>, text frame này chỉ
+          đánh dấu vị trí và khung của số.</td>
+      </tr>
+      <tr>
+        <td><code>SO_VECTOR</code></td>
+        <td>Group bộ số vector vẽ sẵn (có thể bỏ trống). Nếu có, số được ghép từ bộ số này thay vì in
+          bằng chữ — xem ghi chú bên dưới.</td>
       </tr>
       <tr>
         <td><code>LOGO</code></td>
@@ -224,6 +230,14 @@
       thì sẽ tạo áo; nếu có nhóm quần (<code>QUAN_TRAI</code>, <code>QUAN_PHAI</code> cho quần 2 mảnh,
       hoặc <code>QUAN_TRAI1</code>/<code>QUAN_TRAI2</code>/<code>QUAN_PHAI1</code>/<code>QUAN_PHAI2</code> cho quần 4 mảnh)
       thì sẽ tạo quần. Chỉ cần một trong hai cũng được — script chỉ xuất phần có trong thiết kế.</p>
+    <p><strong>Số vector (<code>SO_VECTOR</code>):</strong> nhóm ở cấp ngoài cùng của layer (không nằm trong
+      group thiết kế), chứa đúng một phần tử cho mỗi chữ số, đặt tên <code>0</code>, <code>1</code>, …,
+      <code>9</code>. Mỗi chữ số phải là hình vector (đã <em>Create Outlines</em>), không phải chữ.
+      Khi có <code>SO_VECTOR</code>, mỗi số áo được ghép từ các chữ số này (đặt cạnh nhau, thẳng hàng đáy),
+      phóng to/thu nhỏ đều để vừa khít khung chữ của text frame <code>SO</code> rồi căn giữa trong khung đó.
+      Vì khung lấy theo phần chữ thật của <code>SO</code>, nên để sẵn nội dung mẫu rộng như <code>88</code>.
+      Không có <code>SO_VECTOR</code> thì số vẫn in bằng chữ như trước. Sau khi thêm <code>SO_VECTOR</code>,
+      cần chạy lại <code>nhay_size.jsx</code>.</p>
   </blockquote>
 
   <hr>

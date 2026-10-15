@@ -12,5 +12,6 @@ var QUAN_PHAI1 = 'QUAN_PHAI1';
 var QUAN_PHAI2 = 'QUAN_PHAI2';
 var TEN        = 'TEN';  // name above the number ("Tên trên số" column)
 var SO         = 'SO';
+var SO_VECTOR  = 'SO_VECTOR';  // optional: prepared vector digits 0–9 used for SO instead of text
 var SIZE       = 'SIZE';
 var LOGO       = 'LOGO';

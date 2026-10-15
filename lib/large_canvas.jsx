@@ -22,14 +22,20 @@ function openLargeCanvasCopy(template, copyFile) {
 // layer of the Large Canvas doc, in one clipboard copy/paste. Copy/paste is the only
 // route that keeps the real size: duplicate() into a Large Canvas keeps the numbers
 // (10× too big), and resize() to undo that thins text strokes to 1/100.
+// extraNames (optional) are other top-level items of sourceDoc brought along in the same
+// paste, looked up by name in doc afterwards (e.g. SO_VECTOR).
 // Overwrites the clipboard. Returns { key: { design, outline } } of the pasted items.
-function pasteParts(sourceDoc, doc, layer, keys, scale) {
+function pasteParts(sourceDoc, doc, layer, keys, scale, extraNames) {
+    extraNames = extraNames || [];
     app.activeDocument = sourceDoc;
     sourceDoc.selection = null;
     for (var i = 0; i < keys.length; i++) {
         requireItem(sourceDoc.pageItems, keys[i] + '_FINAL', sourceDoc.name).parent.selected = true;
     }
-    if (sourceDoc.selection.length !== keys.length) {
+    for (var e = 0; e < extraNames.length; e++) {
+        requireItem(sourceDoc.pageItems, extraNames[e], sourceDoc.name).selected = true;
+    }
+    if (sourceDoc.selection.length !== keys.length + extraNames.length) {
         sourceDoc.selection = null;
         throw new Error('Không chọn được các chi tiết trong ' + sourceDoc.name + ' để sao chép. Hãy mở khóa / hiện layer SIZED_OUTPUT.');
     }

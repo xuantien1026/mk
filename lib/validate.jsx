@@ -4,6 +4,13 @@ var UNIQUE_PART_NAMES = [
     QUAN_TRAI1, QUAN_TRAI2, QUAN_PHAI1, QUAN_PHAI2
 ];
 
+// Top-level names countParts tracks: the parts, plus the optional SO_VECTOR digit set
+// (not a part — it has no bounding path, so collectBoundsErrors skips it).
+var COUNTED_NAMES = UNIQUE_PART_NAMES.concat([SO_VECTOR]);
+
+// The digits SO_VECTOR must hold, one direct child named after each.
+var SO_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
 // A shirt's body (front + back) is always required. Sleeves are an independent
 // all-or-none group: most shirts have both, but some — e.g. basketball jerseys —
 // have neither. Each group is validated separately so a sleeveless design passes.
@@ -36,9 +43,9 @@ var NON_TEXT_COLLECTIONS = [
 // layer's own pageItems — a handful of objects — are scanned.
 function countParts(doc) {
     var counts = {}, items = {};
-    for (var i = 0; i < UNIQUE_PART_NAMES.length; i++) {
-        counts[UNIQUE_PART_NAMES[i]] = 0;
-        items[UNIQUE_PART_NAMES[i]]  = null;
+    for (var i = 0; i < COUNTED_NAMES.length; i++) {
+        counts[COUNTED_NAMES[i]] = 0;
+        items[COUNTED_NAMES[i]]  = null;
     }
 
     function scanLayer(layer) {
@@ -95,8 +102,8 @@ function findPartialGroup(counts, names) {
 
 function collectDuplicateErrors(counts) {
     var dupes = [];
-    for (var i = 0; i < UNIQUE_PART_NAMES.length; i++) {
-        var n = UNIQUE_PART_NAMES[i];
+    for (var i = 0; i < COUNTED_NAMES.length; i++) {
+        var n = COUNTED_NAMES[i];
         if (counts[n] > 1) dupes.push(n + ' (xuất hiện ' + counts[n] + ' lần)');
     }
     if (dupes.length === 0) return [];
@@ -180,6 +187,34 @@ function collectSoErrors(soItems) {
     return [];
 }
 
+// The optional SO_VECTOR digit set: when present, the print step builds each SO from
+// it (print_pages.jsx), so it must be a group holding exactly one item named after
+// each digit 0–9, each with a real extent. Absent → SO stays text, nothing to check.
+function collectSoVectorErrors(soVector) {
+    if (!soVector) return [];
+    if (soVector.typename !== 'GroupItem') {
+        return ['"' + SO_VECTOR + '" phải là một nhóm (Group) chứa các số 0–9 (hiện là ' + soVector.typename + ')'];
+    }
+    var counts = {}, bad = [];
+    for (var i = 0; i < soVector.pageItems.length; i++) {
+        var it = soVector.pageItems[i];
+        if (!counts.hasOwnProperty(it.name)) counts[it.name] = 0;
+        counts[it.name]++;
+        if (counts[it.name] === 1 && /^[0-9]$/.test(it.name)) {
+            var b = it.geometricBounds;
+            if (!(b[2] - b[0] > 0) || !(b[1] - b[3] > 0)) bad.push('số ' + it.name + ' rỗng (rộng/cao bằng 0)');
+            if (it.typename === 'TextFrame') bad.push('số ' + it.name + ' là chữ, hãy Create Outlines');
+        }
+    }
+    for (var d = 0; d < SO_DIGITS.length; d++) {
+        var n = counts[SO_DIGITS[d]] || 0;
+        if (n === 0) bad.push('thiếu số ' + SO_DIGITS[d]);
+        else if (n > 1) bad.push('số ' + SO_DIGITS[d] + ' xuất hiện ' + n + ' lần');
+    }
+    if (bad.length === 0) return [];
+    return ['Nhóm "' + SO_VECTOR + '" (bộ số vector) không hợp lệ:\n- ' + bad.join('\n- ')];
+}
+
 // Runs every validation against the design document and, if anything fails,
 // throws a single Error listing all problems at once. The document is scanned
 // exactly once (countParts); every check reads from the resulting maps.
@@ -193,6 +228,7 @@ function validateDocument(doc) {
     errors = errors.concat(collectPantErrors(counts));
     errors = errors.concat(collectBoundsErrors(parts.items));
     errors = errors.concat(collectSoErrors(parts.soItems));
+    errors = errors.concat(collectSoVectorErrors(parts.items[SO_VECTOR]));
 
     if (errors.length > 0) {
         throw new Error('File thiết kế không hợp lệ — vui lòng sửa các lỗi sau:\n\n'
