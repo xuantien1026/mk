@@ -66,24 +66,23 @@ function parseOrders(text) {
 
     var rows = parseCsv(text);
 
-    var HDR_SIZE = 'size', HDR_SO = 'so', HDR_TEN_TREN = 'ten tren so', HDR_TEN_DUOI = 'ten duoi so', HDR_VARIANT = 'mau',
+    var HDR_SIZE = 'size', HDR_SO = 'so', HDR_TEN_TREN = 'ten tren so', HDR_VARIANT = 'mau',
         HDR_QUANTITY = 'so luong', HDR_FORM = 'form';
-    var headerRow = -1, sizeCol = -1, soCol = -1, tenTrenCol = -1, tenDuoiCol = -1, variantCol = -1, quantityCol = -1,
+    var headerRow = -1, sizeCol = -1, soCol = -1, tenTrenCol = -1, variantCol = -1, quantityCol = -1,
         formCol = -1;
     for (var r = 0; r < rows.length && headerRow === -1; r++) {
-        var sCol = -1, nCol = -1, ttCol = -1, tdCol = -1, vCol = -1, qCol = -1, fCol = -1;
+        var sCol = -1, nCol = -1, ttCol = -1, vCol = -1, qCol = -1, fCol = -1;
         for (var c = 0; c < rows[r].length; c++) {
             var key = foldAscii(rows[r][c]);
             if      (key === HDR_SIZE)     sCol  = c;
             else if (key === HDR_SO)       nCol  = c;
             else if (key === HDR_TEN_TREN) ttCol = c;
-            else if (key === HDR_TEN_DUOI) tdCol = c;
             else if (key === HDR_VARIANT)  vCol  = c;
             else if (key === HDR_QUANTITY) qCol  = c;
             else if (key === HDR_FORM)     fCol  = c;
         }
         if (sCol !== -1 && nCol !== -1) {
-            headerRow = r; sizeCol = sCol; soCol = nCol; tenTrenCol = ttCol; tenDuoiCol = tdCol; variantCol = vCol;
+            headerRow = r; sizeCol = sCol; soCol = nCol; tenTrenCol = ttCol; variantCol = vCol;
             quantityCol = qCol; formCol = fCol;
         }
     }
@@ -97,7 +96,6 @@ function parseOrders(text) {
             size:      size,
             number:    trimCell(rows[r], soCol),
             nameAbove: tenTrenCol !== -1 ? trimCell(rows[r], tenTrenCol) : '',
-            nameBelow: tenDuoiCol !== -1 ? trimCell(rows[r], tenDuoiCol) : '',
             variant:   variantCol !== -1 ? trimCell(rows[r], variantCol) : '',
             quantity:  quantityCol !== -1 ? trimCell(rows[r], quantityCol) : '',
             form:      formCol !== -1 ? trimCell(rows[r], formCol) : ''

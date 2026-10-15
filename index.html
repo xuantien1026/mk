@@ -204,10 +204,6 @@
         <td>Text frame chứa tên in phía trên số — lấy từ cột <em>Tên trên số</em> (có thể bỏ trống)</td>
       </tr>
       <tr>
-        <td><code>TEN_DUOI</code></td>
-        <td>Text frame chứa tên in phía dưới số — lấy từ cột <em>Tên dưới số</em> (có thể bỏ trống)</td>
-      </tr>
-      <tr>
         <td><code>SO</code></td>
         <td>Text frame chứa số áo (có thể bỏ trống)</td>
       </tr>
@@ -349,10 +345,6 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
         <td>Không — điền vào <code>TEN_TREN</code></td>
       </tr>
       <tr>
-        <td><code>Tên dưới số</code></td>
-        <td>Không — điền vào <code>TEN_DUOI</code></td>
-      </tr>
-      <tr>
         <td><code>Mẫu</code></td>
         <td>Không — nếu có nhiều mẫu, script hỏi in mẫu nào</td>
       </tr>
@@ -360,7 +352,7 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
   </table>
 
   <ul>
-    <li>Ô <strong>Tên trên số</strong>, <strong>Tên dưới số</strong> hoặc <strong>Số</strong> có thể để trống
+    <li>Ô <strong>Tên trên số</strong> hoặc <strong>Số</strong> có thể để trống
       (phần chữ tương ứng bị xóa khỏi áo).</li>
   </ul>
 
@@ -372,8 +364,8 @@ S_SAU_KIEU2    M_SAU_KIEU2    L_SAU_KIEU2    ...</code></pre>
   <ul>
     <li>Cột <code>Số lượng</code> (không bắt buộc): số chi tiết của dòng đó. Ô trống tính là 1, nên nếu không
       có cột này thì mỗi dòng là một sản phẩm.</li>
-    <li>Các cột <code>Số</code>, <code>Tên trên số</code>, <code>Tên dưới số</code> bị bỏ qua — chữ
-      <code>SO</code>, <code>TEN_TREN</code>, <code>TEN_DUOI</code> bị xóa khỏi mọi chi tiết.</li>
+    <li>Các cột <code>Số</code>, <code>Tên trên số</code> bị bỏ qua — chữ
+      <code>SO</code>, <code>TEN_TREN</code> bị xóa khỏi mọi chi tiết.</li>
     <li>Script hỏi thời gian xếp tối ưu (giây, như <code>xep_toi_uu.jsx</code>).</li>
   </ul>
 

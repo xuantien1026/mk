@@ -11,7 +11,6 @@ var QUAN_TRAI2 = 'QUAN_TRAI2';
 var QUAN_PHAI1 = 'QUAN_PHAI1';
 var QUAN_PHAI2 = 'QUAN_PHAI2';
 var TEN_TREN   = 'TEN_TREN';  // name above the number ("Tên trên số" column)
-var TEN_DUOI   = 'TEN_DUOI';  // name below the number ("Tên dưới số" column)
 var SO         = 'SO';
 var SIZE       = 'SIZE';
 var LOGO       = 'LOGO';

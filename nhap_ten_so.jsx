@@ -10,7 +10,7 @@
 #include "lib/print_pages.jsx"
 
 // Step 2 for a named order: one shirt / pant per row of the print command (CSV), its
-// names (TEN_TREN, TEN_DUOI) and number (SO) filled in. Run on the Step-1 masters
+// name (TEN_TREN) and number (SO) filled in. Run on the Step-1 masters
 // document (nhay_size.jsx). For an order of quantities only, see xep_don_so_luong.jsx.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
