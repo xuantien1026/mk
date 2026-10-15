@@ -15,41 +15,62 @@ var SHIRT_SLEEVE_PART_NAMES = [TAY_TRAI, TAY_PHAI];
 var PANT_2_PART_NAMES = [QUAN_TRAI, QUAN_PHAI];
 var PANT_4_PART_NAMES = [QUAN_TRAI1, QUAN_TRAI2, QUAN_PHAI1, QUAN_PHAI2];
 
-// Single pass over the document: counts how many times each relevant part name
-// appears and records a reference to the (last-seen) item for each name, so checks
-// that need the actual item — e.g. collectBoundsErrors — don't have to scan again.
-// UNIQUE_PART_NAMES covers every name any check cares about, so all the collect*
-// checks below can read from the returned maps without re-scanning the document.
+// Every non-text art collection of a Document. Each is flattened (it includes items
+// nested inside groups), so a native getByName on it finds an SO of that type anywhere.
+var NON_TEXT_COLLECTIONS = [
+    'groupItems', 'pathItems', 'compoundPathItems', 'placedItems', 'rasterItems',
+    'symbolItems', 'meshItems', 'pluginItems', 'graphItems', 'legacyTextItems',
+    'nonNativeItems'
+];
+
+// Counts how many times each part name appears and records a reference to the
+// (last-seen) item for each name, so checks that need the actual item — e.g.
+// collectBoundsErrors — don't have to look again. UNIQUE_PART_NAMES covers every
+// name any check cares about, so all the collect* checks below read from the
+// returned maps.
+//
+// Performance: do NOT walk Document.pageItems. It is the flattened list of every art
+// object, and in ExtendScript each access crosses into Illustrator — a design file
+// with two designs had 163,699 objects and this scan alone ran for minutes. Parts
+// are always top-level items of a layer (never nested in a group), so only each
+// layer's own pageItems — a handful of objects — are scanned.
 function countParts(doc) {
-    var counts = {}, items = {}, soItems = [];
+    var counts = {}, items = {};
     for (var i = 0; i < UNIQUE_PART_NAMES.length; i++) {
         counts[UNIQUE_PART_NAMES[i]] = 0;
         items[UNIQUE_PART_NAMES[i]]  = null;
     }
 
-    // Document.pageItems is the flattened list of every art object (including ones
-    // nested inside the design groups), so a single pass reaches every SO no matter
-    // how deeply it sits.
-    //
-    // Performance: in ExtendScript every collection access crosses into Illustrator,
-    // so on a detailed design (tens of thousands of art objects) this loop dominates
-    // the script's startup time. Cache the length once (otherwise it is re-queried
-    // every iteration) and dereference each item once into a local. Most art objects
-    // are unnamed, so skip empty names before any further work.
-    var pageItems = doc.pageItems;
-    var len = pageItems.length;
-    for (var i = 0; i < len; i++) {
-        var it = pageItems[i];
-        var n  = it.name;
-        if (!n) continue;
-        if (counts.hasOwnProperty(n)) {
-            counts[n]++;
-            items[n] = it;
-        } else if (n === SO) {
-            soItems.push(it);
+    function scanLayer(layer) {
+        var pageItems = layer.pageItems;
+        var len = pageItems.length;
+        for (var i = 0; i < len; i++) {
+            var it = pageItems[i];
+            var n  = it.name;
+            if (n && counts.hasOwnProperty(n)) {
+                counts[n]++;
+                items[n] = it;
+            }
         }
+        for (var j = 0; j < layer.layers.length; j++) scanLayer(layer.layers[j]);
     }
-    return { counts: counts, items: items, soItems: soItems };
+    for (var l = 0; l < doc.layers.length; l++) scanLayer(doc.layers[l]);
+
+    return { counts: counts, items: items, soItems: findNonTextSo(doc) };
+}
+
+// SO sits deep inside the design groups, so it can't be found by a top-level scan.
+// Instead ask each non-text collection natively (C-level, fast) for an item named
+// SO: any hit is an SO that isn't a TextFrame. Returns those items (at most one
+// per collection) — enough for collectSoErrors to report the offending type.
+function findNonTextSo(doc) {
+    var found = [];
+    for (var i = 0; i < NON_TEXT_COLLECTIONS.length; i++) {
+        var coll = doc[NON_TEXT_COLLECTIONS[i]];
+        if (!coll) continue;
+        try { found.push(coll.getByName(SO)); } catch (e) { /* none of this type */ }
+    }
+    return found;
 }
 
 // Enforces "all present or none present" for a group of part names, reading from
@@ -150,7 +171,8 @@ function collectBoundsErrors(items) {
 // Every SO element (the shirt/pant number) must be a TextFrame: nhap_ten_so fills it
 // via applyField, which only writes into text frames — so a group (or path) named SO
 // would silently never receive its number — and nhay_size keeps its glyph-stroke
-// border alive by treating it as text. Reads the SO items gathered by countParts.
+// border alive by treating it as text. Reads the non-text SO items found by
+// countParts (findNonTextSo), so any item here is an error.
 function collectSoErrors(soItems) {
     for (var i = 0; i < soItems.length; i++) {
         if (soItems[i].typename !== 'TextFrame') return ['"Số" phải là TextFrame (hiện là ' + soItems[i].typename + ')'];
@@ -160,7 +182,7 @@ function collectSoErrors(soItems) {
 
 // Runs every validation against the design document and, if anything fails,
 // throws a single Error listing all problems at once. The document is scanned
-// exactly once (countParts); every check reads from the resulting counts map.
+// exactly once (countParts); every check reads from the resulting maps.
 function validateDocument(doc) {
     var parts  = countParts(doc);
     var counts = parts.counts;

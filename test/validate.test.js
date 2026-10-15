@@ -137,6 +137,55 @@ test('validateDocument throws when SO is not a text frame', function () {
     assert.throws(() => validateDocument(doc), /"Số" phải là TextFrame/);
 });
 
+test('reports an SO nested inside a part group when it is not a text frame', function () {
+    const { validateDocument } = makeEnv();
+    const doc = makeDoc([
+        { name: 'THAN_TRUOC', typename: 'GroupItem', pageItems: [
+            { name: 'SO', typename: 'GroupItem', pageItems: [] },
+            { typename: 'PathItem', geometricBounds: [0, 10, 10, 0] }
+        ] },
+        'THAN_SAU'
+    ]);
+    assert.throws(() => validateDocument(doc), /"Số" phải là TextFrame \(hiện là GroupItem\)/);
+});
+
+test('accepts an SO text frame nested inside a part group', function () {
+    const { validateDocument } = makeEnv();
+    const doc = makeDoc([
+        { name: 'THAN_TRUOC', typename: 'GroupItem', pageItems: [
+            { name: 'SO', typename: 'TextFrame' },
+            { typename: 'PathItem', geometricBounds: [0, 10, 10, 0] }
+        ] },
+        'THAN_SAU'
+    ]);
+    assert.doesNotThrow(() => validateDocument(doc));
+});
+
+test('parts are only counted at the top level of a layer, not inside groups', function () {
+    const { countParts } = makeEnv();
+    const doc = makeDoc([
+        'THAN_TRUOC',
+        { name: 'WRAPPER', typename: 'GroupItem', pageItems: [{ name: 'THAN_TRUOC' }] }
+    ]);
+    assert.equal(countParts(doc).counts.THAN_TRUOC, 1);
+});
+
+test('parts on sublayers are counted', function () {
+    const { countParts } = makeEnv();
+    const doc = makeDoc(['THAN_TRUOC']);
+    doc.layers[0].layers = [{ pageItems: [{ name: 'THAN_SAU' }], layers: [] }];
+    assert.equal(countParts(doc).counts.THAN_SAU, 1);
+});
+
+test('validateDocument does not walk the flattened Document.pageItems', function () {
+    const { validateDocument } = makeEnv();
+    const doc = makeDoc(['THAN_TRUOC', 'THAN_SAU']);
+    Object.defineProperty(doc, 'pageItems', {
+        get() { throw new Error('Document.pageItems must not be scanned'); }
+    });
+    assert.doesNotThrow(() => validateDocument(doc));
+});
+
 test('performance: validateDocument on 50,000 irrelevant items completes in under 50ms', function () {
     const { validateDocument } = makeEnv();
     const names = [];
