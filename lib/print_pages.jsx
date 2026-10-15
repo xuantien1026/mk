@@ -145,7 +145,7 @@ function buildPrintPage(sourceDoc, template, sizes, orders) {
 // Build the print page of a layout engine's layout ({ sheets, placements: [{ sheet, x,
 // y, rot, data: { sz, n, side } }] }, x/y real pt from the sheet's top-left, rot 0/180,
 // as layoutNest gives) straight from the Step-1 parts in sourceDoc: each placement gets
-// a copy of part {sz}_{side}, named {sz}_{n}_{side} with its SO / TEN_TREN
+// a copy of part {sz}_{side}, named {sz}_{n}_{side} with its SO / TEN
 // removed, turned rot° and moved so its cut outline's top-left lands at (x, y). The page
 // is a copy of template, left open; returns it. Afterwards each layout placement has
 // outline (its printed part's cut outline) and rect (its sheet's artboard rect).
@@ -212,8 +212,8 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
             var g = m.design.duplicate(outLayer, ElementPlacement.PLACEATEND);  g.name = instanceName + '_FINAL';
             var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
             var maxW = CUSTOMER_NAME_MAX_WIDTH[sz] ? u(CUSTOMER_NAME_MAX_WIDTH[sz]) : null;
-            applyField(g, TEN_TREN, order.nameAbove, maxW);
-            applyField(g, SO,       order.number,    null);
+            applyField(g, TEN, order.nameAbove, maxW);
+            applyField(g, SO,  order.number,    null);
 
             // Keep each part-instance's _OUTLINE and _FINAL together as a single group,
             // the same way Step 1 does, so they read as one unit in the print output.

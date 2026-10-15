@@ -21,7 +21,7 @@
 // size (1 when blank). Every piece's parts are nested together in one go, as
 // xep_toi_uu.jsx does (every piece of a size is the same, so the Step-1 parts are all
 // the nester needs), then the print page is built straight into that layout, with SO,
-// TEN_TREN removed. Optionally, every shirt and sleeve is placed before
+// TEN removed. Optionally, every shirt and sleeve is placed before
 // the pants, and/or size by size (checkboxes next to the time). The run is recorded to debug/last_nest/.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
