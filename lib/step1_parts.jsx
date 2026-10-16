@@ -30,6 +30,11 @@ function productSides(doc, kind, sz) {
     return itemExists(doc, sz + '_LEFT_SLEEVE_FINAL') ? ['FRONT', 'BACK'].concat(SLEEVE_SIDES) : ['FRONT', 'BACK'];
 }
 
+// The product ('SHIRT' or 'PANT') a side belongs to — pant sides are pantSides'.
+function sideKind(side) {
+    return /PANT/.test(side) ? 'PANT' : 'SHIRT';
+}
+
 // Sizes for which Step 1 produced shirt and/or pant parts, in SIZES order.
 function detectPreparedSizes(doc) {
     var prepared = [];

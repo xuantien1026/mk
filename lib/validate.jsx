@@ -4,11 +4,11 @@ var UNIQUE_PART_NAMES = [
     QUAN_TRAI1, QUAN_TRAI2, QUAN_PHAI1, QUAN_PHAI2
 ];
 
-// Top-level names countParts tracks: the parts, plus the optional SO_VECTOR digit set
-// (not a part — it has no bounding path, so collectBoundsErrors skips it).
-var COUNTED_NAMES = UNIQUE_PART_NAMES.concat([SO_VECTOR]);
+// Top-level names countParts tracks: the parts, plus the optional vector digit sets
+// (not parts — they have no bounding path, so collectBoundsErrors skips them).
+var COUNTED_NAMES = UNIQUE_PART_NAMES.concat(SO_VECTOR_NAMES);
 
-// The digits SO_VECTOR must hold, one direct child named after each.
+// The digits a vector digit set must hold, one direct child named after each.
 var SO_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
 // A shirt's body (front + back) is always required. Sleeves are an independent
@@ -187,13 +187,14 @@ function collectSoErrors(soItems) {
     return [];
 }
 
-// The optional SO_VECTOR digit set: when present, the print step builds each SO from
-// it (print_pages.jsx), so it must be a group holding exactly one item named after
-// each digit 0–9, each with a real extent. Absent → SO stays text, nothing to check.
-function collectSoVectorErrors(soVector) {
+// An optional vector digit set (SO_AO / SO_QUAN, named name): when present, the print
+// step builds that product's SO from it (print_pages.jsx), so it must be a group holding
+// exactly one item named after each digit 0–9, each with a real extent. Absent → that
+// product's SO stays text, nothing to check.
+function collectSoVectorErrors(soVector, name) {
     if (!soVector) return [];
     if (soVector.typename !== 'GroupItem') {
-        return ['"' + SO_VECTOR + '" phải là một nhóm (Group) chứa các số 0–9 (hiện là ' + soVector.typename + ')'];
+        return ['"' + name + '" phải là một nhóm (Group) chứa các số 0–9 (hiện là ' + soVector.typename + ')'];
     }
     var counts = {}, bad = [];
     for (var i = 0; i < soVector.pageItems.length; i++) {
@@ -212,7 +213,7 @@ function collectSoVectorErrors(soVector) {
         else if (n > 1) bad.push('số ' + SO_DIGITS[d] + ' xuất hiện ' + n + ' lần');
     }
     if (bad.length === 0) return [];
-    return ['Nhóm "' + SO_VECTOR + '" (bộ số vector) không hợp lệ:\n- ' + bad.join('\n- ')];
+    return ['Nhóm "' + name + '" (bộ số vector) không hợp lệ:\n- ' + bad.join('\n- ')];
 }
 
 // Runs every validation against the design document and, if anything fails,
@@ -228,7 +229,9 @@ function validateDocument(doc) {
     errors = errors.concat(collectPantErrors(counts));
     errors = errors.concat(collectBoundsErrors(parts.items));
     errors = errors.concat(collectSoErrors(parts.soItems));
-    errors = errors.concat(collectSoVectorErrors(parts.items[SO_VECTOR]));
+    for (var v = 0; v < SO_VECTOR_NAMES.length; v++) {
+        errors = errors.concat(collectSoVectorErrors(parts.items[SO_VECTOR_NAMES[v]], SO_VECTOR_NAMES[v]));
+    }
 
     if (errors.length > 0) {
         throw new Error('File thiết kế không hợp lệ — vui lòng sửa các lỗi sau:\n\n'

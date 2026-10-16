@@ -23,7 +23,7 @@ function openLargeCanvasCopy(template, copyFile) {
 // route that keeps the real size: duplicate() into a Large Canvas keeps the numbers
 // (10× too big), and resize() to undo that thins text strokes to 1/100.
 // extraNames (optional) are other top-level items of sourceDoc brought along in the same
-// paste, looked up by name in doc afterwards (e.g. SO_VECTOR).
+// paste, looked up by name in doc afterwards (e.g. SO_AO).
 // Overwrites the clipboard. Returns { key: { design, outline } } of the pasted items.
 function pasteParts(sourceDoc, doc, layer, keys, scale, extraNames) {
     extraNames = extraNames || [];

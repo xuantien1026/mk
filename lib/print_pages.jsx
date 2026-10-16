@@ -38,12 +38,13 @@ function applyField(container, fieldName, value, maxW) {
 // Gap between the digits of a vector SO, as a fraction of the number's tallest digit.
 var SO_DIGIT_GAP = 0.1;
 
-// The prepared digits of a pasted SO_VECTOR group (validate.jsx checks the design has
-// them all): { '0': { item, bounds }, … }, bounds the digit's visibleBounds.
-function soDigits(soVector) {
+// The prepared digits of a pasted vector digit set (SO_AO / SO_QUAN, named name;
+// validate.jsx checks the design has them all): { '0': { item, bounds }, … }, bounds
+// the digit's visibleBounds.
+function soDigits(soVector, name) {
     var digits = {};
     for (var d = 0; d <= 9; d++) {
-        var item = requireItem(soVector.pageItems, String(d), SO_VECTOR);
+        var item = requireItem(soVector.pageItems, String(d), name);
         digits[d] = { item: item, bounds: item.visibleBounds };
     }
     return digits;
@@ -98,7 +99,7 @@ function buildVectorNumber(value, digits, layer, box) {
     for (i = 0; i < chars.length; i++) {
         if (!/^[0-9]$/.test(chars[i])) {
             throw new Error('Số "' + value + '" có ký tự không phải chữ số — bộ số vector ('
-                + SO_VECTOR + ') chỉ có các số 0–9.');
+                + SO_VECTOR_NAMES.join(', ') + ') chỉ có các số 0–9.');
         }
         b = digits[chars[i]].bounds;
         if (b[1] - b[3] > h) h = b[1] - b[3];
@@ -289,11 +290,20 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
         // same-document (fast).
         var mastersLayer = doc.layers.add();
         mastersLayer.name = 'MASTERS';
-        // When Step 1 carried a vector digit set (SO_VECTOR) over from the design, every
-        // SO is built from it instead of being filled in as text.
-        var vectorSo = itemExists(sourceDoc, SO_VECTOR);
-        var masters  = pasteParts(sourceDoc, doc, mastersLayer, keys, scale, vectorSo ? [SO_VECTOR] : []);
-        var digits   = vectorSo ? soDigits(requireItem(doc.pageItems, SO_VECTOR, doc.name)) : null;
+        // When Step 1 carried a vector digit set over from the design — SO_AO for the
+        // shirt, SO_QUAN for the pant (their number designs differ) — every SO of that
+        // product is built from it instead of being filled in as text.
+        var VECTOR_SO_BY_KIND = { SHIRT: SO_AO, PANT: SO_QUAN };
+        var vectorNames = [];
+        for (var kind in VECTOR_SO_BY_KIND) {
+            if (itemExists(sourceDoc, VECTOR_SO_BY_KIND[kind])) vectorNames.push(VECTOR_SO_BY_KIND[kind]);
+        }
+        var masters = pasteParts(sourceDoc, doc, mastersLayer, keys, scale, vectorNames);
+        var digitsByKind = {}; // 'SHIRT' / 'PANT' → its soDigits, absent when its SO stays text
+        for (kind in VECTOR_SO_BY_KIND) {
+            var vn = VECTOR_SO_BY_KIND[kind];
+            if (contains(vectorNames, vn)) digitsByKind[kind] = soDigits(requireItem(doc.pageItems, vn, doc.name), vn);
+        }
         var boxesByKey = {}; // master key → its soBoxes, measured once
 
 
@@ -305,6 +315,7 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
             var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
             var maxW = CUSTOMER_NAME_MAX_WIDTH[sz] ? u(CUSTOMER_NAME_MAX_WIDTH[sz]) : null;
             applyField(g, TEN, order.nameAbove, maxW);
+            var digits = digitsByKind[sideKind(side)];
             if (digits) {
                 var key = sz + '_' + side;
                 if (!boxesByKey[key]) boxesByKey[key] = soBoxes(m.design);
