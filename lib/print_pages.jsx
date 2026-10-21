@@ -315,6 +315,12 @@ function buildPage(sourceDoc, template, sheets, keys, build) {
             var o = m.outline.duplicate(outLayer, ElementPlacement.PLACEATEND); o.name = instanceName + '_OUTLINE';
             var maxW = CUSTOMER_NAME_MAX_WIDTH[sz] ? u(CUSTOMER_NAME_MAX_WIDTH[sz]) : null;
             applyField(g, TEN, order.nameAbove, maxW);
+            if (isFemaleForm(order)) {
+                var sizeLabels = findAllItemsByName(g, SIZE);
+                for (var sl = 0; sl < sizeLabels.length; sl++) {
+                    if (sizeLabels[sl].typename === 'TextFrame') sizeLabels[sl].contents += ' NU';
+                }
+            }
             var digits = digitsByKind[sideKind(side)];
             if (digits) {
                 var key = sz + '_' + side;
