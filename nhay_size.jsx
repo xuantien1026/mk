@@ -713,11 +713,13 @@ function main() {
         }
     }
 
-    // Carry the design's vector digit set (if any) into the Step-1 document so the print
-    // step can build each SO from it. It goes below the last row, inside the artboard
-    // like everything else (off-canvas items report clamped bounds).
-    if (hasItem(mainDoc.pageItems, SO_VECTOR)) {
-        var soVector = mainDoc.pageItems.getByName(SO_VECTOR).duplicate(outputLayer, ElementPlacement.PLACEATEND);
+    // Carry the design's vector digit sets (SO_AO for the shirt, SO_QUAN for the pant —
+    // whichever it has) into the Step-1 document so the print step can build each SO from
+    // them. Each gets its own row below the last one, inside the artboard like everything
+    // else (off-canvas items report clamped bounds).
+    for (var sv = 0; sv < SO_VECTOR_NAMES.length; sv++) {
+        if (!hasItem(mainDoc.pageItems, SO_VECTOR_NAMES[sv])) continue;
+        var soVector = mainDoc.pageItems.getByName(SO_VECTOR_NAMES[sv]).duplicate(outputLayer, ElementPlacement.PLACEATEND);
         var svb      = soVector.visibleBounds;
         var soRowH   = (svb[1] - svb[3]) + padding * 2;
         fitRow(soRowH);

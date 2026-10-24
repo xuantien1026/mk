@@ -199,11 +199,11 @@ test('performance: validateDocument on 50,000 irrelevant items completes in unde
     assert.ok(elapsed < 50, 'Expected < 50ms but took ' + elapsed + 'ms');
 });
 
-// A fake SO_VECTOR group holding the given digit names (each a valid 10x10 path
-// unless given as an object).
-function soVector(digits) {
+// A fake vector digit set group (SO_AO by default) holding the given digit names (each
+// a valid 10x10 path unless given as an object).
+function soVector(digits, name) {
     return {
-        name: 'SO_VECTOR', typename: 'GroupItem', geometricBounds: [0, 10, 100, 0],
+        name: name || 'SO_AO', typename: 'GroupItem', geometricBounds: [0, 10, 100, 0],
         pageItems: digits.map(function (d) {
             return typeof d === 'string' ? { name: d, typename: 'GroupItem', geometricBounds: [0, 10, 10, 0] } : d;
         })
@@ -211,37 +211,58 @@ function soVector(digits) {
 }
 const ALL_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-test('validateDocument passes without an SO_VECTOR group (SO stays text)', function () {
+test('validateDocument passes without vector digit sets (SO stays text)', function () {
     const { collectSoVectorErrors, countParts } = makeEnv();
-    assert.equal(collectSoVectorErrors(countParts(makeDoc(['THAN_TRUOC', 'THAN_SAU'])).items.SO_VECTOR).length, 0);
+    const items = countParts(makeDoc(['THAN_TRUOC', 'THAN_SAU'])).items;
+    assert.equal(collectSoVectorErrors(items.SO_AO, 'SO_AO').length, 0);
+    assert.equal(collectSoVectorErrors(items.SO_QUAN, 'SO_QUAN').length, 0);
 });
 
-test('validateDocument passes with a complete SO_VECTOR digit set', function () {
+test('validateDocument passes with complete SO_AO and SO_QUAN digit sets', function () {
     const { validateDocument } = makeEnv();
-    assert.doesNotThrow(() => validateDocument(makeDoc(['THAN_TRUOC', 'THAN_SAU', soVector(ALL_DIGITS)])));
+    assert.doesNotThrow(() => validateDocument(makeDoc(['THAN_TRUOC', 'THAN_SAU', 'QUAN_TRAI', 'QUAN_PHAI',
+        soVector(ALL_DIGITS, 'SO_AO'), soVector(ALL_DIGITS, 'SO_QUAN')])));
 });
 
-test('reports missing, duplicated, empty and text digits in SO_VECTOR', function () {
+test('validateDocument passes with only one of SO_AO / SO_QUAN', function () {
+    const { validateDocument } = makeEnv();
+    assert.doesNotThrow(() => validateDocument(makeDoc(['THAN_TRUOC', 'THAN_SAU', soVector(ALL_DIGITS, 'SO_AO')])));
+    assert.doesNotThrow(() => validateDocument(makeDoc(['QUAN_TRAI', 'QUAN_PHAI', soVector(ALL_DIGITS, 'SO_QUAN')])));
+});
+
+test('reports missing, duplicated, empty and text digits in a vector digit set', function () {
     const { collectSoVectorErrors, countParts } = makeEnv();
     const digits = ['0', '1', '1', '3', '4', '5', '6', '7',
         { name: '8', typename: 'PathItem', geometricBounds: [0, 0, 0, 0] },
         { name: '9', typename: 'TextFrame', geometricBounds: [0, 10, 10, 0] }];
-    const errors = collectSoVectorErrors(countParts(makeDoc([soVector(digits)])).items.SO_VECTOR);
+    const errors = collectSoVectorErrors(countParts(makeDoc([soVector(digits, 'SO_QUAN')])).items.SO_QUAN, 'SO_QUAN');
     assert.equal(errors.length, 1);
+    assert.ok(errors[0].includes('SO_QUAN'),              'should name the group');
     assert.ok(errors[0].includes('thiếu số 2'),           'should report the missing digit');
     assert.ok(errors[0].includes('số 1 xuất hiện 2 lần'), 'should report the duplicated digit');
     assert.ok(errors[0].includes('số 8 rỗng'),            'should report the empty digit');
     assert.ok(errors[0].includes('số 9 là chữ'),          'should report the text digit');
 });
 
-test('reports an SO_VECTOR that is not a group', function () {
+test('reports each invalid vector digit set separately', function () {
     const { validateDocument } = makeEnv();
-    assert.throws(() => validateDocument(makeDoc([{ name: 'SO_VECTOR', typename: 'PathItem' }])), /SO_VECTOR/);
+    assert.throws(() => validateDocument(makeDoc([soVector(['0'], 'SO_AO'), soVector(ALL_DIGITS, 'SO_QUAN')])),
+        (e) => e.message.includes('"SO_AO"') && !e.message.includes('"SO_QUAN"'));
+    assert.throws(() => validateDocument(makeDoc([soVector(ALL_DIGITS, 'SO_AO'), soVector(['0'], 'SO_QUAN')])),
+        (e) => e.message.includes('"SO_QUAN"') && !e.message.includes('"SO_AO"'));
 });
 
-test('reports a duplicated SO_VECTOR group', function () {
+test('reports a vector digit set that is not a group', function () {
+    const { validateDocument } = makeEnv();
+    assert.throws(() => validateDocument(makeDoc([{ name: 'SO_AO', typename: 'PathItem' }])), /SO_AO/);
+    assert.throws(() => validateDocument(makeDoc([{ name: 'SO_QUAN', typename: 'PathItem' }])), /SO_QUAN/);
+});
+
+test('reports a duplicated vector digit set group', function () {
     const { collectDuplicateErrors, countParts } = makeEnv();
-    const errors = collectDuplicateErrors(countParts(makeDoc([soVector(ALL_DIGITS), soVector(ALL_DIGITS)])).counts);
+    const errors = collectDuplicateErrors(countParts(makeDoc([
+        soVector(ALL_DIGITS, 'SO_QUAN'), soVector(ALL_DIGITS, 'SO_QUAN'), soVector(ALL_DIGITS, 'SO_AO')])).counts);
     assert.equal(errors.length, 1);
-    assert.ok(errors[0].includes('SO_VECTOR'));
+    assert.ok(errors[0].includes('SO_QUAN'));
+    assert.ok(!errors[0].includes('SO_AO'));
 });
