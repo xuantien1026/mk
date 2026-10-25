@@ -121,9 +121,10 @@ function filterByVariant(orders, chosen) {
     return out;
 }
 
-// FORM is blank (NAM) or NỮ, matched case/accent insensitively.
+// FORM is blank (NAM) or NỮ, matched case/accent insensitively. order.form may be
+// absent (e.g. the BLANK order xep_don_so_luong.jsx prints with) — treat that as NAM.
 function isFemaleForm(order) {
-    return foldAscii(order.form) === 'nu';
+    return foldAscii(order.form || '') === 'nu';
 }
 
 // Whether any order is FORM NỮ — only then is there a NAM / NỮ choice to make.
