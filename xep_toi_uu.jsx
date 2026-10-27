@@ -18,7 +18,8 @@
 // one right after the other. Optionally, every shirt and sleeve is placed before the
 // pants, and/or size by size, smallest first (checkboxes next to the time). Rearranges
 // the page in place; close it without saving to undo. Each run is recorded to debug/last_nest/ (see lib/nest_record.jsx).
-// xep_don_so_luong.jsx lays out its pieces with the same engine by itself.
+// xep_don_so_luong.jsx runs this same pipeline (nestOntoPage, lib/nest_page.jsx): keep
+// every step of it there, not here, so both scripts always get it.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
 
@@ -31,7 +32,6 @@ function main() {
     if (options === null) return;
 
     var nested = nestPage(doc, items, SCRIPT_DIR, options);
-    trimSheetBottoms(doc, nested.layout);
     alert('Đã xếp lại ' + items.length + ' chi tiết: ' + nested.before + ' → ' + nested.after + ' tấm in.'
         + (nested.evaluations ? '\nĐã thử ' + nested.evaluations + ' cách xếp.' : ''));
 }

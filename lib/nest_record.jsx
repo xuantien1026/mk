@@ -1,4 +1,4 @@
-// A record of the last layout engine 2 run (xep_toi_uu.jsx), for finding out which stage
+// A record of the last layout engine 2 run (nestOntoPage, nest_page.jsx), for finding out which stage
 // went wrong when a layout comes out bad: node tools/check_nest.js debug/last_nest.
 // Needs json.jsx, export_shapes.jsx.
 //
@@ -49,15 +49,15 @@ function recordedParts(items, scale) {
 
 // after.json: where each part really ended up — its outline's visible top-left from its
 // sheet's top-left (real pt, y down), what result.json asked for — and its outline
-// traced. In layout.placements order, the same as result.json's. placed(placement) →
-// { outline (the placed part's), rect (its sheet's artboard rect, in the same document) }.
-function recordedPlacements(layout, scale, placed) {
-    var parts = [];
+// traced. In layout.placements order, the same as result.json's. Each placement has
+// outline (its placed part's, in doc); doc has one artboard per layout sheet, in order.
+function recordedPlacements(layout, doc) {
+    var scale = doc.scaleFactor || 1, parts = [];
     for (var i = 0; i < layout.placements.length; i++) {
-        var p = layout.placements[i], it = p.data, at = placed(p);
-        var r = at.rect, vb = at.outline.visibleBounds;
+        var p = layout.placements[i], it = p.data;
+        var r = doc.artboards[p.sheet.index].artboardRect, vb = p.outline.visibleBounds;
         parts.push({ label: it.label, key: it.key, sheet: p.sheet.index, rot: p.rot,
-                     x: (vb[0] - r[0]) * scale, y: (r[1] - vb[1]) * scale, shape: exportShape(at.outline, scale) });
+                     x: (vb[0] - r[0]) * scale, y: (r[1] - vb[1]) * scale, shape: exportShape(p.outline, scale) });
     }
     return { scale: scale, parts: parts };
 }

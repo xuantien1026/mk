@@ -94,20 +94,3 @@ function applyLayout(doc, layout, scale) {
     for (var k = old - 1; k >= 0; k--) doc.artboards.remove(k);
 }
 
-// After applyLayout(doc, layout): raise each sheet's artboard bottom to its lowest part's
-// cut outline, so no empty space is left below the parts. A sheet with no parts is kept.
-function trimSheetBottoms(doc, layout) {
-    for (var s = 0; s < layout.sheets.length; s++) {
-        var bottom = null;
-        for (var i = 0; i < layout.placements.length; i++) {
-            var p = layout.placements[i];
-            if (p.sheet !== layout.sheets[s]) continue;
-            var b = p.data.outline.visibleBounds[3];
-            if (bottom === null || b < bottom) bottom = b;
-        }
-        if (bottom === null) continue;
-        var ab = doc.artboards[s];
-        var r = ab.artboardRect;
-        if (bottom > r[3]) ab.artboardRect = [r[0], r[1], r[2], bottom];
-    }
-}

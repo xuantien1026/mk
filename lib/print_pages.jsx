@@ -236,7 +236,7 @@ function buildPrintPage(sourceDoc, template, sizes, orders) {
 // a copy of part {sz}_{side}, named {sz}_{n}_{side} with its SO / TEN
 // removed, turned rot° and moved so its cut outline's top-left lands at (x, y). The page
 // is a copy of template, left open; returns it. Afterwards each layout placement has
-// outline (its printed part's cut outline) and rect (its sheet's artboard rect).
+// outline (its printed part's cut outline).
 function buildLayoutPage(sourceDoc, template, layout) {
     var BLANK = { number: '', nameAbove: '' };
     var keys = [];
@@ -254,7 +254,6 @@ function buildLayoutPage(sourceDoc, template, layout) {
         ig.position = [ig.position[0] + (r[0] + page.u(p.x)) - vb[0],
                        ig.position[1] + (r[1] - page.u(p.y)) - vb[1]];
         p.outline = ig.pageItems[0];
-        p.rect = r;
     }
 
     return buildPage(sourceDoc, template, layout.sheets, keys, function (page) {

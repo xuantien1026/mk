@@ -7,18 +7,18 @@ function csv(rows) {
     return rows.map(function (r) { return r.join(','); }).join('\n');
 }
 
-test('parseOrders builds {size, number, nameAbove, nameBelow, variant} from a full header', function () {
+test('parseOrders builds {size, number, nameAbove, variant} from a full header', function () {
     const { parseOrders } = makePrintEnv();
     const text = csv([
-        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ', 'TÊN DƯỚI SỐ', 'MẪU'],
-        ['m', '10', 'Alice', 'Smith', 'Design A'],
-        ['l', '11', 'Bob',   'Jones', 'Design B']
+        ['SIZE', 'SỐ', 'TÊN TRÊN SỐ', 'MẪU'],
+        ['m', '10', 'Alice', 'Design A'],
+        ['l', '11', 'Bob',   'Design B']
     ]);
     const orders = parseOrders(text);
     assert.equal(orders.length, 2);
     assert.deepEqual(
-        { size: orders[0].size, number: orders[0].number, nameAbove: orders[0].nameAbove, nameBelow: orders[0].nameBelow, variant: orders[0].variant },
-        { size: 'M', number: '10', nameAbove: 'Alice', nameBelow: 'Smith', variant: 'Design A' }
+        { size: orders[0].size, number: orders[0].number, nameAbove: orders[0].nameAbove, variant: orders[0].variant },
+        { size: 'M', number: '10', nameAbove: 'Alice', variant: 'Design A' }
     );
     assert.equal(orders[1].variant, 'Design B');
 });
@@ -39,8 +39,8 @@ test('parseOrders reads the detail table of a production order, skipping the sum
     ]));
     assert.equal(orders.length, 2);
     assert.deepEqual(
-        { size: orders[0].size, number: orders[0].number, nameAbove: orders[0].nameAbove, nameBelow: orders[0].nameBelow, variant: orders[0].variant },
-        { size: 'M', number: '1', nameAbove: 'A', nameBelow: 'X', variant: '1' }
+        { size: orders[0].size, number: orders[0].number, nameAbove: orders[0].nameAbove, variant: orders[0].variant },
+        { size: 'M', number: '1', nameAbove: 'A', variant: '1' }
     );
     assert.equal(orders[1].size, 'L');
 });
@@ -64,7 +64,6 @@ test('parseOrders leaves optional columns as empty strings when absent', functio
         ['m', '7']
     ]));
     assert.equal(orders[0].nameAbove, '');
-    assert.equal(orders[0].nameBelow, '');
     assert.equal(orders[0].variant, '');
 });
 
@@ -186,16 +185,16 @@ test('groupOrdersBySize groups in order and drops sizes that were not prepared',
     assert.equal(bySize.XL, undefined);
 });
 
-test('parseOrders matches the Tên dưới số header regardless of accent/case', function () {
+test('parseOrders ignores a Tên dưới số column (no longer printed)', function () {
     const { parseOrders } = makePrintEnv();
-    for (const header of ['Tên dưới số', 'TEN DUOI SO', '  tên dưới số ']) {
-        const orders = parseOrders(csv([
-            ['size', 'so', header],
-            ['s', '1', 'Below']
-        ]));
-        assert.equal(orders[0].nameBelow, 'Below', 'header "' + header + '" should match');
-        assert.equal(orders[0].nameAbove, '');
-    }
+    const orders = parseOrders(csv([
+        ['size', 'so', 'Tên dưới số'],
+        ['s', '1', 'Below']
+    ]));
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].number, '1');
+    assert.equal(orders[0].nameAbove, '');
+    assert.equal(orders[0].nameBelow, undefined);
 });
 
 test('parseOrders reads the Số lượng column, blank when absent', function () {

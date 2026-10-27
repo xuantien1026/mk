@@ -80,7 +80,9 @@ function createSheetPacker() {
         sheets: sheets,
         place: function (h) {
             var gap = (sheet && sheet.used > 0) ? PRODUCT_GAP : 0;
-            if (!sheet || sheet.used + gap + h > SHEET_H) { // sheet full
+            // 1e-6 pt of slack: summed heights carry rounding error, and a product that
+            // exactly fills the rest of a sheet must still fit.
+            if (!sheet || sheet.used + gap + h > SHEET_H + 1e-6) { // sheet full
                 sheet = makeSheet(sheets.length);
                 sheet.used = 0;
                 sheets.push(sheet);
