@@ -12,6 +12,7 @@
 #include "lib/export_shapes.jsx"
 #include "lib/nester_bridge.jsx"
 #include "lib/layout_nest.jsx"
+#include "lib/output_parts.jsx"
 #include "lib/nest_record.jsx"
 #include "lib/nest_page.jsx"
 
@@ -19,9 +20,9 @@
 // each size. Run on the Step-1 masters document (nhay_size.jsx) with a print command
 // (CSV) in the same format as nhap_ten_so.jsx's: each row is Số lượng pieces of its
 // size (1 when blank). Every piece's parts are nested together in one go, as
-// xep_toi_uu.jsx does (every piece of a size is the same, so the Step-1 parts are all
-// the nester needs), then the print page is built straight into that layout, with SO,
-// TEN removed. Optionally, every shirt and sleeve is placed before
+// xep_toi_uu.jsx does, through the same pipeline (nestOntoPage, lib/nest_page.jsx;
+// every piece of a size is the same, so the Step-1 parts are all the nester needs), with
+// the print page built straight into that layout, SO and TEN removed. Optionally, every shirt and sleeve is placed before
 // the pants, and/or size by size (checkboxes next to the time). The run is recorded to debug/last_nest/.
 
 var SCRIPT_DIR = new File($.fileName).parent.fsName;
@@ -65,13 +66,7 @@ function main() {
     var options = askNestOptions(items);
     if (options === null) return;
 
-    var recorder = nestRecorder(SCRIPT_DIR);
-    recorder.save('before.json', function () { return recordedParts(items, scale); });
-    var layout = layoutNest(items, scale, SCRIPT_DIR, recorder, options);
-    var doc = buildLayoutPage(sourceDoc, run.template, layout);
-    recorder.save('after.json', function () {
-        return recordedPlacements(layout, doc.scaleFactor, function (p) { return p; });
-    });
+    var layout = nestNewPage(sourceDoc, run.template, items, SCRIPT_DIR, options).layout;
 
     alert('Hoàn thành! Đã xếp ' + items.length + ' chi tiết vào ' + layout.sheets.length + ' tấm in (159cm × 500cm).');
 }

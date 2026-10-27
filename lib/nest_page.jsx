@@ -1,6 +1,7 @@
-// Layout engine 2 on one print page, for xep_toi_uu.jsx and xep_don_so_luong.jsx. Needs
-// config.jsx, utils.jsx, names.jsx, sheet_layout.jsx, json.jsx, export_shapes.jsx,
-// nester_bridge.jsx, layout_nest.jsx, output_parts.jsx, nest_record.jsx.
+// Layout engine 2 on one print page, for xep_toi_uu.jsx and xep_don_so_luong.jsx — both
+// go through nestOntoPage. Needs config.jsx, utils.jsx, names.jsx, sheet_layout.jsx,
+// json.jsx, export_shapes.jsx, nester_bridge.jsx, layout_nest.jsx, output_parts.jsx,
+// nest_record.jsx; nestNewPage also print_pages.jsx (and what it needs).
 
 // Ask how long the nester may search, in seconds; when items (nestableParts) mix shirt
 // and pant parts, whether to place every shirt and sleeve before the pants; and when
@@ -46,22 +47,64 @@ function nestableParts(doc) {
     return items;
 }
 
-// Nest the parts items (nestableParts) of print page doc onto as few sheets as the
-// nester finds in options.timeLimit seconds, rearranging doc in place. Records the run to
-// root/debug/last_nest/ (nest_record.jsx). options: askNestOptions's, see layoutNest.
-// Returns { before, after } sheet counts, the layout applied and the nester's evaluations
-// (layouts tried).
-function nestPage(doc, items, root, options) {
-    var scale = doc.scaleFactor || 1;
-    var before = doc.artboards.length;
+// Layout engine 2, from the parts to the finished page — the one pipeline both scripts
+// run, so they always get the same steps: record the parts, nest them, put them on the
+// page (place), record where they landed, trim the sheets. A step every nested page
+// needs belongs here, never in a script's main. Records the run to root/debug/last_nest/
+// (nest_record.jsx). items: layoutNest's, their outlines in documents of scale real pt
+// per unit; options: askNestOptions's. place(layout) puts every placement's part on the
+// page and returns the page document, with one artboard per layout sheet, in order, and
+// each placement given outline: its placed part's cut outline. Returns { doc, layout }.
+function nestOntoPage(items, scale, root, options, place) {
     var recorder = nestRecorder(root);
     recorder.save('before.json', function () { return recordedParts(items, scale); });
     var layout = layoutNest(items, scale, root, recorder, options);
-    applyLayout(doc, layout, scale);
-    recorder.save('after.json', function () {
-        return recordedPlacements(layout, scale, function (p) {
-            return { outline: p.data.outline, rect: doc.artboards[p.sheet.index].artboardRect };
-        });
-    });
+    var doc = place(layout);
+    recorder.save('after.json', function () { return recordedPlacements(layout, doc); });
+    trimSheetBottoms(doc, layout);
+    return { doc: doc, layout: layout };
+}
+
+// xep_toi_uu.jsx: nest the parts items (nestableParts) of print page doc, rearranging
+// doc in place. Returns { before, after } sheet counts, the layout applied and the
+// nester's evaluations (layouts tried).
+function nestPage(doc, items, root, options) {
+    var scale = doc.scaleFactor || 1;
+    var before = doc.artboards.length;
+    var layout = nestOntoPage(items, scale, root, options, function (layout) {
+        applyLayout(doc, layout, scale);
+        for (var i = 0; i < layout.placements.length; i++) {
+            layout.placements[i].outline = layout.placements[i].data.outline;
+        }
+        return doc;
+    }).layout;
     return { before: before, after: layout.sheets.length, layout: layout, evaluations: layout.evaluations };
+}
+
+// xep_don_so_luong.jsx: nest the parts items (quantityParts — Step-1 outlines in
+// sourceDoc), building the print page straight into that layout (buildLayoutPage, a copy
+// of template). Returns { doc (the page), layout }.
+function nestNewPage(sourceDoc, template, items, root, options) {
+    return nestOntoPage(items, sourceDoc.scaleFactor || 1, root, options, function (layout) {
+        return buildLayoutPage(sourceDoc, template, layout);
+    });
+}
+
+// After placing layout on doc (nestOntoPage): raise each sheet's artboard bottom to its
+// lowest part's cut outline, so no empty space is left below the parts. A sheet with no
+// parts is kept.
+function trimSheetBottoms(doc, layout) {
+    for (var s = 0; s < layout.sheets.length; s++) {
+        var bottom = null;
+        for (var i = 0; i < layout.placements.length; i++) {
+            var p = layout.placements[i];
+            if (p.sheet !== layout.sheets[s]) continue;
+            var b = p.outline.visibleBounds[3];
+            if (bottom === null || b < bottom) bottom = b;
+        }
+        if (bottom === null) continue;
+        var ab = doc.artboards[s];
+        var r = ab.artboardRect;
+        if (bottom > r[3]) ab.artboardRect = [r[0], r[1], r[2], bottom];
+    }
 }
